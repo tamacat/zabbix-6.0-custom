@@ -1,18 +1,18 @@
-# Zabbix 6.0 EOL-Free Custom Build — Compose定義 [FR4.1][FR4.2]。
+# Zabbix 6.0 EOL-Free Custom Build — Compose definition [FR4.1][FR4.2].
 #
-# server/web/agent2/proxy はブリッジネットワーク上でコンテナ名によって互いに到達する
-# (ネットワークトポロジー設計に基づく)。本番のMySQLはコンテナ化しない
-# — 運用者が既存に持つMySQLインスタンスへDB_SERVER_HOST経由で接続する
-# (公式イメージとの環境変数・ボリューム互換性を維持する)。
+# server/web/agent2/proxy reach each other by container name on a bridge network (per the network
+# topology design). Production MySQL is not containerized — the operator's existing MySQL instance is
+# reached via DB_SERVER_HOST (this keeps environment-variable/volume compatibility with the official
+# images).
 #
-# ビルドコンテキストはこのディレクトリ(zabbix-6.0-custom/)自身、Dockerfileは
-# docker/<component>/Dockerfile(scripts/build-images.shと同じビルド構成 —
-# BR5.2によりamd64のみ)。
+# Build context is this directory (zabbix-6.0-custom/) itself; Dockerfiles are docker/<component>/
+# Dockerfile (same build layout as scripts/build-images.sh — amd64 only, per BR5.2).
 #
-# 使用法:
-#   cp .env.example .env   # DB_SERVER_HOST / MYSQL_* 等を記入する
-#   docker compose config --quiet   # 設定の構文検証のみ(CompatibilityTestRunner)
-#   docker compose up -d            # server + web + agent2 + proxy を起動する
+# Usage:
+#   cp .env.example .env   # fill in DB_SERVER_HOST / MYSQL_* etc. (or leave DB_SERVER_HOST unset to
+#                           # use the dev-mysql service below instead — see its own comment)
+#   docker compose config --quiet   # config syntax validation only (CompatibilityTestRunner)
+#   docker compose up -d            # server + web + agent2 + proxy (+ dev-mysql, see below)
 
 networks:
   zbxnet:
@@ -27,6 +27,7 @@ volumes:
   zbx-proxy-db-data:
   zbx-proxy-enc:
   zbx-proxy-externalscripts:
+  zbx-dev-mysql-data:
 
 services:
   zabbix-server:
@@ -102,9 +103,8 @@ services:
       - zbx-agent2-enc:/var/lib/zabbix/enc
     restart: unless-stopped
 
-  # zabbix-proxy(SQLite3) — ローカルバッファはSQLite3のみを使用する(BR5.1の例外規定)。
-  # 主データベース(MySQL)には一切接続しない。不要であればこのサービスと関連volumeを
-  # コメントアウトしてよい。
+  # zabbix-proxy (SQLite3) — its local buffer uses SQLite3 only (the BR5.1 exception). It never
+  # connects to the main database (MySQL). Comment out this service and its volumes if not needed.
   zabbix-proxy:
     build:
       context: .
@@ -128,3 +128,34 @@ services:
       - zbx-proxy-enc:/var/lib/zabbix/enc
       - zbx-proxy-externalscripts:/var/lib/zabbix/externalscripts
     restart: unless-stopped
+
+  # Verification/development-only database. Not part of the production deployment — production points
+  # DB_SERVER_HOST at the operator's own existing MySQL instead. This service only runs when the "dev"
+  # profile is active; .env.example sets COMPOSE_PROFILES=dev so a plain `docker compose up -d` starts
+  # it by default (matching the sibling zabbix-5.0-custom project's behavior). Unset COMPOSE_PROFILES
+  # (or set it to something else) in .env to opt out and point DB_SERVER_HOST at a real MySQL instead.
+  dev-mysql:
+    image: docker.io/library/mysql:8.0
+    container_name: zabbix-dev-mysql
+    profiles: ["dev"]
+    # Zabbix requires utf8mb4/utf8mb4_bin specifically (its frontend's own schema health-check refuses
+    # anything else, including MySQL 8's own default utf8mb4_0900_ai_ci collation). schema.sql's
+    # CREATE TABLE statements carry no per-table CHARACTER SET/COLLATE clause, so every table inherits
+    # whatever the database's default was at creation time — these flags make that default correct
+    # (confirmed against a real fresh load: without them, the Zabbix UI refuses to start with
+    # "Unsupported charset or collation").
+    command: --character-set-server=utf8mb4 --collation-server=utf8mb4_bin
+    networks:
+      - zbxnet
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DEV_MYSQL_ROOT_PASSWORD:-zabbix-dev-root}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-zabbix}
+      MYSQL_USER: ${MYSQL_USER:-zabbix}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-zabbix}
+    volumes:
+      - zbx-dev-mysql-data:/var/lib/mysql
+      - ./docker/dev-mysql/init:/docker-entrypoint-initdb.d:ro
+      - ./sources/zabbix-6.0.48/database/mysql:/zabbix-schema-src:ro
+    ports:
+      - "${DEV_MYSQL_PORT:-3306}:3306"
+    restart: "no"
