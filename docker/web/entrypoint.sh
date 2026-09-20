@@ -33,7 +33,15 @@ if [ -z "${MYSQL_PASSWORD:-}" ]; then
 fi
 
 echo "**** Applying PHP_TZ=${PHP_TZ} to date.timezone..."
-sed -i "s/^date.timezone = .*/date.timezone = ${PHP_TZ}/" /etc/php83/conf.d/99-zabbix.ini
+# `sed -i` writes a temp file into the target's own directory before renaming
+# it into place, which needs write access on the DIRECTORY, not just the file.
+# The image intentionally chowns only this one file to the non-root zabbix
+# user (least-privilege; the directory itself stays root-owned), so `sed -i`
+# fails here with a permission error. Read + rewrite through a shell variable
+# instead: that only needs to open the already zabbix-owned file for writing,
+# never touching the directory.
+ZBX_INI_CONTENT="$(sed "s/^date.timezone = .*/date.timezone = ${PHP_TZ}/" /etc/php83/conf.d/99-zabbix.ini)"
+printf '%s\n' "${ZBX_INI_CONTENT}" > /etc/php83/conf.d/99-zabbix.ini
 
 echo "**** Generating ${CONFIG_FILE} from environment variables..."
 
@@ -70,4 +78,10 @@ echo "**** Starting PHP-FPM..."
 "${PHP_FPM_BIN}" --nodaemonize &
 
 echo "**** Starting nginx..."
-exec nginx -g "daemon off;"
+# nginxはconfig解析より前の起動処理(マスタープロセスのブートストラップ)で、
+# nginx.conf内のerror_logディレクティブが効くよりも先にコンパイル時既定のログパス
+# (/var/lib/nginx/logs/error.log、root所有)を開こうとする。非rootのzabbixユーザー
+# では書き込めず[emerg]で即座に落ちる(実機テストで判明。nginx.conf側のerror_log
+# 指定だけでは防げない)。`-e`コマンドラインオプションはconfig解析より前に有効になる
+# ため、これで確実にstderrへ向ける。
+exec nginx -e /dev/stderr -g "daemon off;"

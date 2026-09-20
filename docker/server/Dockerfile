@@ -34,6 +34,15 @@ RUN apk add --no-cache \
 WORKDIR /build
 COPY ${ZABBIX_SRC_DIR}/ /build/
 
+# git checkoutはtarball展開時のmtime順序を保持しないため、autotoolsが「ソースの方が
+# ビルド成果物より新しい」と誤判定し、このビルドステージには存在しないautomake/aclocal
+# の再実行を試みて失敗する(既知のautotools問題。--disable-dependency-trackingとは
+# 別種の問題で、それだけでは防げない)。configure.ac/aclocal.m4だけでなくm4/配下の
+# マクロ等、依存関係の全体像を個別に追うのは壊れやすいため、コピーされたツリー全体を
+# 同一タイムスタンプへ揃え、「新しい方が存在しない」状態にして再生成条件そのものを
+# 成立させない。
+RUN find . -exec touch -d '2000-01-01 00:00:00' {} +
+
 # --with-mysql: BR5.1(zabbix-serverはMySQLのみ)。net-snmp/libcurl/libxml2/opensslは
 # 公式zabbix/zabbix-server-mysqlイメージが持つ任意統合(SNMP監視・Web監視・XML/TLS)を
 # 維持し、公式イメージとの環境変数・ボリューム互換性を保つために含める。

@@ -21,12 +21,27 @@ RUN apk add --no-cache go build-base git autoconf automake libtool pcre-dev open
 WORKDIR /build
 COPY ${ZABBIX_SRC_DIR}/ /build/
 
+# git checkoutはtarball展開時のmtime順序を保持しないため、autotoolsが「ソースの方が
+# ビルド成果物より新しい」と誤判定し、automake/aclocalの再実行を試みる(既知のautotools
+# 問題。--disable-dependency-trackingとは別種の問題で、それだけでは防げない)。本ステージは
+# autoconf/automakeを導入済みだが、コピーされたツリー全体を同一タイムスタンプへ揃えて
+# 再生成条件そのものを成立させない方が、バージョン差異による再生成失敗のリスクがなく
+# 確実なため、他コンポーネントと同じ対応を取る。
+RUN find . -exec touch -d '2000-01-01 00:00:00' {} +
+
 RUN sh ./configure --disable-dependency-tracking --enable-agent2 --with-openssl
 
 # -D_LARGEFILE64_SOURCE: go-sqlite3(agent2の依存プラグインの一つ)がglibc専用の
 # pread64/pwrite64シンボルを要求するため、musl(Alpine)で同名エイリアスを提供させる。
+#
+# src/go/Makefile.amは `go build -o bin ...` を実行する。`bin`はソース側に
+# ディレクトリとして存在しないため、Goはこれを「出力ファイル名」として扱い、
+# `src/go/bin`という名のファイル(バイナリそのもの)を生成する — `src/go/bin/`
+# ディレクトリの中に`zabbix_agent2`という名で置かれるわけではない(ソース未配置
+# 状態で書かれたスキャフォールドの誤った想定だったため、実ソース追加後の実ビルドで
+# 判明・修正)。
 RUN make -j"$(nproc)" CGO_CFLAGS="-I/build/include -D_LARGEFILE64_SOURCE" \
-	&& cp src/go/bin/zabbix_agent2 /build/bin/zabbix_agent2
+	&& cp src/go/bin /build/bin/zabbix_agent2
 
 FROM alpine:${ALPINE_VERSION}
 

@@ -28,6 +28,13 @@ RUN apk add --no-cache \
 WORKDIR /build
 COPY ${ZABBIX_SRC_DIR}/ /build/
 
+# git checkoutはtarball展開時のmtime順序を保持しないため、autotoolsが「ソースの方が
+# ビルド成果物より新しい」と誤判定し、このビルドステージには存在しないautomake/aclocal
+# の再実行を試みて失敗する(既知のautotools問題。--disable-dependency-trackingとは
+# 別種の問題で、それだけでは防げない)。コピーされたツリー全体を同一タイムスタンプへ
+# 揃え、再生成条件そのものを成立させない(docker/server/Dockerfileと同じ対応)。
+RUN find . -exec touch -d '2000-01-01 00:00:00' {} +
+
 RUN sh ./configure \
 		--disable-dependency-tracking \
 		--enable-proxy \

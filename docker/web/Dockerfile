@@ -49,6 +49,15 @@ RUN addgroup -g 1997 -S zabbix \
 COPY docker/web/conf/nginx.conf /etc/nginx/nginx.conf
 COPY docker/web/conf/zabbix.ini /etc/${PHP_PKG}/conf.d/99-zabbix.ini
 
+# Alpineのphp-fpmパッケージのphp-fpm.confは既定で`;error_log = log/php83/error.log`と
+# コメントアウトされており、無指定時はコンパイル時既定の絶対パス(/var/log/php83/
+# error.log、root所有)が使われ、非rootのzabbixユーザーでは書き込めずFPM初期化そのものが
+# 失敗する(docker/web/conf/nginx.confのerror_log問題と同じクラスのバグ、実機テストで判明。
+# 実際のコメントアウト行の書式は`;error_log = log/php83/error.log`であり、素朴な
+# `^error_log = `一致では捕捉できない)。ここはまだroot権限がある(この後の`USER zabbix`
+# より前)ので、ビルド時にコメントを外してstderrへのリダイレクトへ書き換える。
+RUN sed -i 's#^;error_log = .*#error_log = /proc/self/fd/2#' /etc/${PHP_PKG}/php-fpm.conf
+
 # ui/conf/zabbix.conf.php はソースに存在しない(.exampleのみ) — entrypoint.shが
 # 環境変数からコンテナ起動時に生成するため、イメージには焼き込まない。
 COPY --chown=zabbix:zabbix ${ZABBIX_SRC_DIR}/ui/ /usr/share/zabbix/
