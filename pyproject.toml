@@ -1,0 +1,19 @@
+[project]
+name = "zabbix6-release-tools"
+version = "0.1.0"
+description = "Zabbix 6.0 EOL-Free Custom Build のビルド/リリースツール層(VulnerabilityRegistry・ScanRunner・ImagePublisher)"
+requires-python = ">=3.9"
+dependencies = [
+    "PyYAML>=6.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+# tests/scripts/ は bats-core 用のシェルテスト(*.bats)であり、pytest収集対象外。
+addopts = "-q"

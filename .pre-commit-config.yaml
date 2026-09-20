@@ -1,0 +1,31 @@
+# pre-commitフック定義 [FR5.4]。シークレットスキャンをコミット前チェックとして実施する。
+#
+# gitleaksをコミット前チェックとして登録する。CI側は scripts/scan-secrets.sh が
+# 同じgitleaksでコミット差分・イメージレイヤーの二重チェックを行う(二重チェックの
+# 一方をここが担う)。
+#
+# 導入方法:
+#   pip install pre-commit  (またはお好みの方法で導入)
+#   pre-commit install
+#
+# hadolint(Dockerfile向け)・shellcheck(シェルスクリプト向け)は、このプロジェクト
+# 自身が新規に書くビルド/CI層(トラックB)向けの軽量lintツールとして追加する。
+# アップストリームZabbixソース(トラックA)には新規フォーマッタ/リンタを導入しないため、
+# 対象パスを docker/ と scripts/ のみに限定する。
+repos:
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.21.2
+    hooks:
+      - id: gitleaks
+
+  - repo: https://github.com/hadolint/hadolint
+    rev: v2.13.1-beta
+    hooks:
+      - id: hadolint-docker
+        files: ^docker/.*/Dockerfile$
+
+  - repo: https://github.com/shellcheck-py/shellcheck-py
+    rev: v0.10.0.1
+    hooks:
+      - id: shellcheck
+        files: ^scripts/.*\.sh$

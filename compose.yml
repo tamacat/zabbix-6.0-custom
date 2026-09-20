@@ -1,0 +1,130 @@
+# Zabbix 6.0 EOL-Free Custom Build — Compose定義 [FR4.1][FR4.2]。
+#
+# server/web/agent2/proxy はブリッジネットワーク上でコンテナ名によって互いに到達する
+# (ネットワークトポロジー設計に基づく)。本番のMySQLはコンテナ化しない
+# — 運用者が既存に持つMySQLインスタンスへDB_SERVER_HOST経由で接続する
+# (公式イメージとの環境変数・ボリューム互換性を維持する)。
+#
+# ビルドコンテキストはこのディレクトリ(zabbix-6.0-custom/)自身、Dockerfileは
+# docker/<component>/Dockerfile(scripts/build-images.shと同じビルド構成 —
+# BR5.2によりamd64のみ)。
+#
+# 使用法:
+#   cp .env.example .env   # DB_SERVER_HOST / MYSQL_* 等を記入する
+#   docker compose config --quiet   # 設定の構文検証のみ(CompatibilityTestRunner)
+#   docker compose up -d            # server + web + agent2 + proxy を起動する
+
+networks:
+  zbxnet:
+    driver: bridge
+
+volumes:
+  zbx-web-conf:
+  zbx-server-alertscripts:
+  zbx-server-externalscripts:
+  zbx-server-enc:
+  zbx-agent2-enc:
+  zbx-proxy-db-data:
+  zbx-proxy-enc:
+  zbx-proxy-externalscripts:
+
+services:
+  zabbix-server:
+    build:
+      context: .
+      dockerfile: docker/server/Dockerfile
+      args:
+        ZABBIX_SRC_DIR: ${ZABBIX_SRC_DIR:-sources/zabbix-6.0.48}
+        ALPINE_VERSION: ${ALPINE_VERSION:-3.24}
+    image: tamacat/zabbix-server:${ZABBIX_IMAGE_TAG:-6.0-custom}
+    container_name: zabbix-server
+    networks:
+      - zbxnet
+    environment:
+      DB_SERVER_HOST: ${DB_SERVER_HOST:?set DB_SERVER_HOST to your existing MySQL host in .env}
+      DB_SERVER_PORT: ${DB_SERVER_PORT:-3306}
+      MYSQL_USER: ${MYSQL_USER:-zabbix}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:?set MYSQL_PASSWORD in .env}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-zabbix}
+      ZBX_DBTLSCONNECT: ${ZBX_DBTLSCONNECT:-}
+      ZBX_DBTLSCAFILE: ${ZBX_DBTLSCAFILE:-}
+    volumes:
+      - zbx-server-alertscripts:/var/lib/zabbix/alertscripts
+      - zbx-server-externalscripts:/var/lib/zabbix/externalscripts
+      - zbx-server-enc:/var/lib/zabbix/enc
+    restart: unless-stopped
+
+  zabbix-web:
+    build:
+      context: .
+      dockerfile: docker/web/Dockerfile
+      args:
+        ZABBIX_SRC_DIR: ${ZABBIX_SRC_DIR:-sources/zabbix-6.0.48}
+        ALPINE_VERSION: ${ALPINE_VERSION:-3.24}
+    image: tamacat/zabbix-web:${ZABBIX_IMAGE_TAG:-6.0-custom}
+    container_name: zabbix-web
+    networks:
+      - zbxnet
+    depends_on:
+      - zabbix-server
+    ports:
+      - "${ZABBIX_WEB_PORT:-8080}:8080"
+    environment:
+      DB_SERVER_HOST: ${DB_SERVER_HOST:?set DB_SERVER_HOST to your existing MySQL host in .env}
+      DB_SERVER_PORT: ${DB_SERVER_PORT:-3306}
+      MYSQL_USER: ${MYSQL_USER:-zabbix}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:?set MYSQL_PASSWORD in .env}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-zabbix}
+      ZBX_SERVER_HOST: zabbix-server
+      ZBX_SERVER_NAME: ${ZBX_SERVER_NAME:-}
+      PHP_TZ: ${PHP_TZ:-UTC}
+    volumes:
+      - zbx-web-conf:/usr/share/zabbix/conf
+    restart: unless-stopped
+
+  zabbix-agent2:
+    build:
+      context: .
+      dockerfile: docker/agent2/Dockerfile
+      args:
+        ZABBIX_SRC_DIR: ${ZABBIX_SRC_DIR:-sources/zabbix-6.0.48}
+        ALPINE_VERSION: ${ALPINE_VERSION:-3.24}
+    image: tamacat/zabbix-agent2:${ZABBIX_IMAGE_TAG:-6.0-custom}
+    container_name: zabbix-agent2
+    networks:
+      - zbxnet
+    depends_on:
+      - zabbix-server
+    environment:
+      ZBX_SERVER_HOST: zabbix-server
+      ZBX_HOSTNAME: ${ZBX_HOSTNAME:-}
+    volumes:
+      - zbx-agent2-enc:/var/lib/zabbix/enc
+    restart: unless-stopped
+
+  # zabbix-proxy(SQLite3) — ローカルバッファはSQLite3のみを使用する(BR5.1の例外規定)。
+  # 主データベース(MySQL)には一切接続しない。不要であればこのサービスと関連volumeを
+  # コメントアウトしてよい。
+  zabbix-proxy:
+    build:
+      context: .
+      dockerfile: docker/proxy/Dockerfile
+      args:
+        ZABBIX_SRC_DIR: ${ZABBIX_SRC_DIR:-sources/zabbix-6.0.48}
+        ALPINE_VERSION: ${ALPINE_VERSION:-3.24}
+    image: tamacat/zabbix-proxy:${ZABBIX_IMAGE_TAG:-6.0-custom}
+    container_name: zabbix-proxy
+    networks:
+      - zbxnet
+    depends_on:
+      - zabbix-server
+    ports:
+      - "${ZABBIX_PROXY_PORT:-10051}:10051"
+    environment:
+      ZBX_SERVER_HOST: zabbix-server
+      ZBX_PROXY_HOSTNAME: ${ZBX_PROXY_HOSTNAME:-zabbix-proxy}
+    volumes:
+      - zbx-proxy-db-data:/var/lib/zabbix/db_data
+      - zbx-proxy-enc:/var/lib/zabbix/enc
+      - zbx-proxy-externalscripts:/var/lib/zabbix/externalscripts
+    restart: unless-stopped

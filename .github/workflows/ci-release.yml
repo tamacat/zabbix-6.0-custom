@@ -1,0 +1,198 @@
+# CI/CDパイプライン(通常フロー: push/pull_request、定期スケジュールフロー: schedule)。
+# 単一ワークフローに3トリガーをまとめ、schedule実行はlintのみスキップして検証(verify)
+# 以降を通しで再実行する。
+#
+# 既知の制限: Zabbix 6.0本体ソース(git submodule)が未追加のため、verifyジョブの
+# BuildPipelineステップは現時点では `docker build` のCOPYステップで失敗する
+# (README.md「Adding the Zabbix source」参照、意図された制約)。submodule追加後、
+# このワークフロー自体の変更なしに動作するようになる。
+name: CI / Release
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    # 毎週月曜03:00 UTC。ベースイメージ(Alpine)の定期再ビルド・再スキャンのための
+    # 既定値であり、運用者はこのcron式を直接編集していつでも変更できる。
+    - cron: "0 3 * * 1"
+  workflow_dispatch: {}
+
+env:
+  ZABBIX_VERSION: "6.0.48"
+  ALPINE_VERSION: "3.24"
+  IMAGE_ARCH: "amd64"
+  REGISTRY_PATH: "data/vulnerability-registry.yaml"
+
+defaults:
+  run:
+    working-directory: zabbix-6.0-custom
+
+jobs:
+  lint:
+    # 警告のみ・非ブロッキング。トラックB(このプロジェクト自身が新規に書くビルド/CI層)
+    # のみを対象とし、アップストリームZabbixソース(トラックA)には新規フォーマッタ/
+    # リンタを導入しない。schedule実行はコード変更を伴わないためスキップする。
+    name: Lint (advisory, Track B only)
+    if: github.event_name != 'schedule'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: hadolint (Dockerfile)
+        uses: hadolint/hadolint-action@v3.1.0
+        continue-on-error: true
+        with:
+          dockerfile: zabbix-6.0-custom/docker/server/Dockerfile
+
+      - name: shellcheck (scripts/*.sh)
+        continue-on-error: true
+        run: shellcheck scripts/*.sh
+
+  verify:
+    # BuildPipeline → ScanRunner(SCA) → ScanRunner(SAST) →
+    # SecretScanner(CI、Git差分+イメージレイヤー) → SBOM生成 →
+    # CompatibilityTestRunner → 公開前提条件ゲート判定(BR3.1)。
+    # `main`へのマージ前にテスト・スキャンを実行する方針に従い、単体テスト
+    # (pytest/bats)もここで再実行する。
+    name: Verify (tests, build, scan, compat-test)
+    runs-on: ubuntu-latest
+    services:
+      # compat-test.sh のdocker compose起動先。実運用のMySQL(本番DB)ではなく、
+      # CI専用の使い捨てインスタンス — 環境変数の配線・起動可否のみを検証する
+      # (本プロジェクトは本番MySQLをコンテナ化しない設計のため、これは代替物)。
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: ci-root-password
+          MYSQL_DATABASE: zabbix
+          MYSQL_USER: zabbix
+          MYSQL_PASSWORD: ci-test-password
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+    outputs:
+      build_date: ${{ steps.vars.outputs.build_date }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Python dependencies
+        run: pip install PyYAML pytest semgrep
+
+      - name: Install cppcheck, bats-core
+        run: sudo apt-get update && sudo apt-get install -y cppcheck bats
+
+      - name: Install Trivy
+        run: curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin
+
+      - name: Install gitleaks
+        # .pre-commit-config.yaml と同じバージョン(v8.21.2)に揃え、pre-commit側と
+        # CI側で検出能力が食い違わないようにする[NFR3.1: 二重チェック]。
+        run: |
+          curl -sSL -o gitleaks.tar.gz \
+            https://github.com/gitleaks/gitleaks/releases/download/v8.21.2/gitleaks_8.21.2_linux_x64.tar.gz
+          tar -xzf gitleaks.tar.gz gitleaks
+          sudo mv gitleaks /usr/local/bin/gitleaks
+          rm gitleaks.tar.gz
+
+      - name: Unit tests (pytest)
+        run: python -m pytest tests -q
+
+      - name: Unit tests (bats)
+        run: bats tests/scripts
+
+      - name: Compute build date
+        id: vars
+        run: echo "build_date=$(date -u +%Y%m%d)" >> "$GITHUB_OUTPUT"
+
+      - name: Run CI verification pipeline (stages 3-9)
+        env:
+          BUILD_DATE: ${{ steps.vars.outputs.build_date }}
+          DB_SERVER_HOST: 127.0.0.1
+          MYSQL_USER: zabbix
+          MYSQL_PASSWORD: ci-test-password
+          MYSQL_DATABASE: zabbix
+          SBOM_DIR: ${{ github.workspace }}/zabbix-6.0-custom/sbom
+        run: ./scripts/ci-pipeline.sh
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: sbom-${{ steps.vars.outputs.build_date }}
+          path: zabbix-6.0-custom/sbom/
+          if-no-files-found: ignore
+
+  publish:
+    # セルフレビュー承認ゲート(BR3.2)→ 公開 → cosign keyless署名 → SBOM添付。
+    # トリガー種別(push/pull_request/schedule)を問わず常に発生する。
+    #
+    # BR3.2のセルフレビュー承認は、この`environment: production`に対する
+    # GitHub Actions Environment protection rule(必須レビュアー)で実装する。
+    # レビュアーが承認するまでこのジョブ自体が開始しない。Environmentの作成・
+    # 必須レビュアー設定はGitHub側の手動セットアップが必要(README.md参照、
+    # このワークフローファイルの変更だけでは有効化されない)。
+    name: Publish (manual self-review gate)
+    needs: verify
+    runs-on: ubuntu-latest
+    environment: production
+    permissions:
+      id-token: write # cosign keyless署名(Sigstore OIDC)用
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Python dependencies
+        run: pip install PyYAML
+
+      - uses: sigstore/cosign-installer@v3
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: sbom-${{ needs.verify.outputs.build_date }}
+          path: zabbix-6.0-custom/sbom
+
+      - uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Rebuild images (fresh, matching the already-verified commit)
+        env:
+          BUILD_DATE: ${{ needs.verify.outputs.build_date }}
+        run: ./scripts/build-images.sh
+
+      - name: Publish each component
+        # BR3.1(4条件ゲート)はpush-images.sh内部でも再判定される。BR3.2の人による
+        # セルフレビューは、このジョブに到達する前のEnvironment承認で既に済んでいる
+        # ため、ここでは`--yes`で非対話的に確認済みとして扱う(二重の対話待ちで
+        # CIをデッドロックさせないため)。
+        env:
+          BUILD_DATE: ${{ needs.verify.outputs.build_date }}
+        run: |
+          set -euo pipefail
+          for component in zabbix-server zabbix-web zabbix-agent2 zabbix-proxy; do
+            tag="$(python3 -m release_tools.cli generate-tag \
+              --component "${component}" --zabbix-version "${ZABBIX_VERSION}" \
+              --build-date "${BUILD_DATE}" --arch "${IMAGE_ARCH}")"
+            sbom_file="sbom/$(echo "${tag}" | tr '/:' '__').cyclonedx.json"
+            ./scripts/push-images.sh --tag "${tag}" \
+              --sca Pass --sast Pass --compat Pass --secret Clean \
+              --sbom "${sbom_file}" --yes
+          done

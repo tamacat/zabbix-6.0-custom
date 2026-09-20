@@ -1,0 +1,21 @@
+# 開発者ローカルの.env(DB_SERVER_HOST/MYSQL_PASSWORD等の実際の認証情報を含み得るため、
+# 絶対にコミットしない)。.env.exampleはテンプレートとしてコミット対象。
+.env
+
+# Pythonキャッシュ・パッケージング成果物
+__pycache__/
+*.pyc
+.pytest_cache/
+*.egg-info/
+
+# bats-coreをローカルにvendorした場合の一時ディレクトリ(コミット対象外)
+/bats-core/
+
+# SBOM生成先(scripts/ci-pipeline.shの既定は$(mktemp -d)だが、SBOM_DIRをこの配下に
+# 指定した場合の取り違え防止)
+/sbom/
+
+# Editor / OS
+.DS_Store
+.vscode/
+.idea/
