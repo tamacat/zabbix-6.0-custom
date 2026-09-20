@@ -114,6 +114,85 @@ See [`docs/CONTRIBUTING.md`](docs/CONTRIBUTING.md) for the commit-message
 CVE/GHSA traceability convention and the code-style tracks (patches to
 upstream Zabbix source vs. this project's own build/CI layer).
 
+## First-time database setup (manual)
+
+Unlike the official `zabbix/zabbix-server-mysql` image, `docker/server/entrypoint.sh`
+does **not** auto-load the Zabbix schema into an empty database on first boot.
+Before `zabbix-server` can start against a fresh MySQL database, load the
+three SQL files from the vendored source once, in this order:
+
+```bash
+mysql -h "$DB_SERVER_HOST" -u "$MYSQL_USER" -p"$MYSQL_PASSWORD" "$MYSQL_DATABASE" \
+  < sources/zabbix-6.0.48/database/mysql/schema.sql
+mysql -h "$DB_SERVER_HOST" -u "$MYSQL_USER" -p"$MYSQL_PASSWORD" "$MYSQL_DATABASE" \
+  < sources/zabbix-6.0.48/database/mysql/images.sql
+mysql -h "$DB_SERVER_HOST" -u "$MYSQL_USER" -p"$MYSQL_PASSWORD" "$MYSQL_DATABASE" \
+  < sources/zabbix-6.0.48/database/mysql/data.sql
+```
+
+**The database must exist with `utf8mb4` character set and `utf8mb4_bin`
+collation before loading `schema.sql`.** None of its `CREATE TABLE` statements
+carry a per-table `CHARACTER SET`/`COLLATE` clause, so every table silently
+inherits whatever the database's default was at creation time. MySQL 8's own
+server default is `utf8mb4_0900_ai_ci`, not `utf8mb4_bin` — load the schema
+into a database created with that default and the Zabbix frontend refuses to
+start ("Unsupported charset or collation for tables: ..."), confirmed against
+a real fresh load. Create it explicitly first if your MySQL doesn't already
+default to `utf8mb4_bin`:
+
+```sql
+CREATE DATABASE zabbix CHARACTER SET utf8mb4 COLLATE utf8mb4_bin;
+```
+
+If the database user lacks the `SUPER` privilege and binary logging is
+enabled (common on managed/shared MySQL, and on a stock `mysql:8.0` test
+instance), `schema.sql` fails partway through creating trigger/function
+objects (`ERROR 1419 ... SUPER privilege and binary logging is enabled`).
+Either grant `SUPER`, or set `log_bin_trust_function_creators=1` (globally,
+or for the session loading the schema) before running it. If a partial load
+already happened, drop and recreate the database before retrying — `schema.sql`
+is not safe to re-run over a partially-loaded one (`ERROR 1050 ... already exists`).
+
+This is a deliberate scope boundary, not an oversight still to be closed:
+official-image-style auto-initialization was considered and declined, to
+avoid a container silently reinitializing a database it merely can't yet see
+data in. Do this once per fresh database, exactly as you would for any other
+first-time Zabbix installation.
+
+### Local verification database: `dev-mysql` (on by default)
+
+For local verification only (never used in production), a throwaway MySQL
+service with all of the above already handled — correct charset/collation,
+the `SUPER`/binary-logging workaround, and loading the three SQL files in the
+right order via the standard `docker-entrypoint-initdb.d` mechanism — is
+defined under the `dev` Compose profile. `.env.example` sets
+`COMPOSE_PROFILES=dev` and points `DB_SERVER_HOST` at it, so the whole stack
+comes up with zero manual steps:
+
+```bash
+cp .env.example .env
+docker compose up -d   # brings up dev-mysql (one-time schema load happens
+                        # automatically) alongside server/web/agent2/proxy
+```
+
+`zabbix-server`/`zabbix-web` have no explicit `depends_on` ordering against
+`dev-mysql`'s schema load (which takes on the order of a minute on first
+run), but `zabbix_server`'s own built-in reconnect loop (`database is down:
+reconnecting in 10 seconds`) picks it up as soon as it's ready — no restart
+needed, confirmed against a real fresh `docker compose up -d`.
+
+**For production**, edit `.env`: remove or repoint `COMPOSE_PROFILES`, and
+point `DB_SERVER_HOST` (plus `MYSQL_PASSWORD`) at your own existing MySQL
+instance instead — this project never containerizes, upgrades, or migrates
+that database.
+
+`dev-mysql` also points the pre-seeded "Zabbix server" host's agent
+interface at the `zabbix-agent2` container instead of `data.sql`'s same-host
+default of `zabbix-server`, which this project's split-container topology
+doesn't match (confirmed against a real fresh load — without it, the Web UI
+shows "Zabbix agent is not available" indefinitely). See
+[`docker/dev-mysql/init/00-load-zabbix-schema.sh`](docker/dev-mysql/init/00-load-zabbix-schema.sh).
+
 ## Continuous Integration
 
 [`​.github/workflows/ci-release.yml`](.github/workflows/ci-release.yml) runs on
