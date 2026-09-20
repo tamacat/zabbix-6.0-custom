@@ -1,11 +1,6 @@
 # CI/CDパイプライン(通常フロー: push/pull_request、定期スケジュールフロー: schedule)。
 # 単一ワークフローに3トリガーをまとめ、schedule実行はlintのみスキップして検証(verify)
 # 以降を通しで再実行する。
-#
-# 既知の制限: Zabbix 6.0本体ソース(git submodule)が未追加のため、verifyジョブの
-# BuildPipelineステップは現時点では `docker build` のCOPYステップで失敗する
-# (README.md「Adding the Zabbix source」参照、意図された制約)。submodule追加後、
-# このワークフロー自体の変更なしに動作するようになる。
 name: CI / Release
 
 on:
@@ -25,10 +20,6 @@ env:
   IMAGE_ARCH: "amd64"
   REGISTRY_PATH: "data/vulnerability-registry.yaml"
 
-defaults:
-  run:
-    working-directory: zabbix-6.0-custom
-
 jobs:
   lint:
     # 警告のみ・非ブロッキング。トラックB(このプロジェクト自身が新規に書くビルド/CI層)
@@ -44,7 +35,7 @@ jobs:
         uses: hadolint/hadolint-action@v3.1.0
         continue-on-error: true
         with:
-          dockerfile: zabbix-6.0-custom/docker/server/Dockerfile
+          dockerfile: docker/server/Dockerfile
 
       - name: shellcheck (scripts/*.sh)
         continue-on-error: true
@@ -123,14 +114,14 @@ jobs:
           MYSQL_USER: zabbix
           MYSQL_PASSWORD: ci-test-password
           MYSQL_DATABASE: zabbix
-          SBOM_DIR: ${{ github.workspace }}/zabbix-6.0-custom/sbom
+          SBOM_DIR: ${{ github.workspace }}/sbom
         run: ./scripts/ci-pipeline.sh
 
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: sbom-${{ steps.vars.outputs.build_date }}
-          path: zabbix-6.0-custom/sbom/
+          path: sbom/
           if-no-files-found: ignore
 
   publish:
@@ -166,7 +157,7 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           name: sbom-${{ needs.verify.outputs.build_date }}
-          path: zabbix-6.0-custom/sbom
+          path: sbom
 
       - uses: docker/login-action@v3
         with:
