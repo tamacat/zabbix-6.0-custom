@@ -10,7 +10,12 @@ setup() {
 	TEST_TMPDIR="$(mktemp -d)"
 	STUB_BIN="${TEST_TMPDIR}/bin"
 	mkdir -p "${STUB_BIN}"
-	export PATH="${STUB_BIN}:${PATH}"
+	# CI installs trivy/gitleaks to /usr/local/bin (see .github/workflows/ci-release.yml);
+	# without excluding it here, removing a stub to simulate "tool missing" would still find
+	# the real one there, and PATH order alone can't be trusted to keep the stub authoritative
+	# either (confirmed against a real CI run: several tool-stubbing tests passed locally but
+	# failed on GitHub Actions specifically because of this).
+	export PATH="${STUB_BIN}:$(echo "${PATH}" | sed -e 's#:/usr/local/bin:#:#g' -e 's#^/usr/local/bin:##' -e 's#:/usr/local/bin$##')"
 
 	# scan-runner.bats / compat-test.bats と同じ理由: 実運用データ・開発者ローカルの
 	# .envに結果が左右されないよう、隔離する。

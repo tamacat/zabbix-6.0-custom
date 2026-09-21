@@ -18,7 +18,12 @@ exit 0
 EOF
 	chmod +x "${STUB_BIN}/docker"
 
-	export PATH="${STUB_BIN}:${PATH}"
+	# CI installs trivy/gitleaks to /usr/local/bin (see .github/workflows/ci-release.yml);
+	# without excluding it here, removing a stub to simulate "tool missing" would still find
+	# the real one there, and PATH order alone can't be trusted to keep the stub authoritative
+	# either (confirmed against a real CI run: several tool-stubbing tests passed locally but
+	# failed on GitHub Actions specifically because of this).
+	export PATH="${STUB_BIN}:$(echo "${PATH}" | sed -e 's#:/usr/local/bin:#:#g' -e 's#^/usr/local/bin:##' -e 's#:/usr/local/bin$##')"
 
 	# scripts/build-images.sh はスクリプト自身の配置場所からの相対パスで常に
 	# REPO_ROOT/.env を探すため、開発者のローカル.env(バージョン管理対象外)が
