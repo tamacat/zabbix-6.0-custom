@@ -45,7 +45,7 @@ echo "=================================================================="
 echo "サブステップ1: Git差分・履歴スキャン"
 echo "=================================================================="
 GIT_REPORT="${WORKDIR}/gitleaks-git.json"
-if gitleaks detect --source . --no-banner --report-format json --report-path "${GIT_REPORT}"; then
+if gitleaks detect --source . --config .gitleaks.toml --no-banner --report-format json --report-path "${GIT_REPORT}"; then
 	echo "Git差分・履歴スキャン: Clean"
 else
 	echo "Git差分・履歴スキャン: Blocked"
@@ -86,7 +86,7 @@ for image in "$@"; do
 	echo "  展開したレイヤー数: ${layer_count}"
 
 	image_report="${image_workdir}/gitleaks-image.json"
-	if gitleaks detect --source "${rootfs}" --no-git --no-banner \
+	if gitleaks detect --source "${rootfs}" --no-git --config .gitleaks.toml --no-banner \
 		--report-format json --report-path "${image_report}"; then
 		echo "イメージレイヤースキャン (${image}): Clean"
 	else

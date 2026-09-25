@@ -1,0 +1,24 @@
+# gitleaks configuration, used by the pre-commit hook and by scripts/scan-secrets.sh
+# (both the git-history scan and the image-layer scan).
+#
+# The default rules stay on. The two paths below are the only exceptions: false positives
+# in upstream files that are also present in the built zabbix-web image. A scan of image
+# layers has no commit to fingerprint, so these cannot go in .gitleaksignore; they are
+# matched by path instead (the same regex matches the source path
+# sources/zabbix-6.0.48/ui/... and the image path usr/share/zabbix/...).
+#
+# Do not add paths to get a red build green. Add one only after reading the flagged
+# content and confirming it is not a credential, and say why here.
+title = "zabbix-6.0-custom"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Reviewed upstream false positives (see comments)"
+paths = [
+  # php-saml formats PEM keys: the flagged lines are the BEGIN/END header *strings* in code.
+  '''(^|/)vendor/onelogin/php-saml/src/Saml2/Utils\.php$''',
+  # Zabbix's dictionary of commonly used weak passwords, which it refuses; public by design.
+  '''(^|/)data/top_passwords\.txt$''',
+]

@@ -5,6 +5,9 @@
 # <commit>:<file>:<rule>:<line>, so it silences that one finding only: a real secret added
 # to the same file later, or to any other file, is still reported.
 #
+# (php-saml's Utils.php and ui/data/top_passwords.txt are also in the built image, which has no
+# commit to fingerprint, so those two are allowlisted by path in .gitleaks.toml instead.)
+#
 # Do not add entries to get a red build green. Add one only after reading the flagged line
 # and confirming it is not a credential, and say why in a comment here.
 
@@ -12,17 +15,6 @@
 1f485e833be46dcf34a4c1fc124d977ce19ba728:sources/zabbix-6.0.48/src/go/pkg/uri/uri_test.go:generic-api-key:176
 1f485e833be46dcf34a4c1fc124d977ce19ba728:sources/zabbix-6.0.48/src/go/pkg/uri/uri_test.go:generic-api-key:264
 1f485e833be46dcf34a4c1fc124d977ce19ba728:sources/zabbix-6.0.48/src/go/pkg/uri/uri_test.go:generic-api-key:92
-
-# php-saml source: PEM header/footer *strings* used to re-wrap a key; no key material. (3)
-1f485e833be46dcf34a4c1fc124d977ce19ba728:sources/zabbix-6.0.48/ui/vendor/onelogin/php-saml/src/Saml2/Utils.php:private-key:260
-1f485e833be46dcf34a4c1fc124d977ce19ba728:sources/zabbix-6.0.48/ui/vendor/onelogin/php-saml/src/Saml2/Utils.php:private-key:267
-1f485e833be46dcf34a4c1fc124d977ce19ba728:sources/zabbix-6.0.48/ui/vendor/onelogin/php-saml/src/Saml2/Utils.php:private-key:273
-
-# Dictionary of commonly used weak passwords (Zabbix rejects them); public by design. (4)
-1f485e833be46dcf34a4c1fc124d977ce19ba728:sources/zabbix-6.0.48/ui/data/top_passwords.txt:generic-api-key:813054
-1f485e833be46dcf34a4c1fc124d977ce19ba728:sources/zabbix-6.0.48/ui/data/top_passwords.txt:generic-api-key:879701
-1f485e833be46dcf34a4c1fc124d977ce19ba728:sources/zabbix-6.0.48/ui/data/top_passwords.txt:generic-api-key:943171
-1f485e833be46dcf34a4c1fc124d977ce19ba728:sources/zabbix-6.0.48/ui/data/top_passwords.txt:generic-api-key:997772
 
 # Upstream template data (SQL): Acronis item names/keys such as 'get_token', and a fixed
 # 'X-Application-Secret: <UUID>' header value from the same template. That value is a vendor
