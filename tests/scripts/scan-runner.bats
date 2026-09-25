@@ -24,6 +24,28 @@ teardown() {
 	rm -rf "${TEST_TMPDIR}"
 }
 
+# 「ツールが無い」状況を再現する。PATHからそのツールを提供するディレクトリを外し、同じ
+# ディレクトリにある他の実行ファイル(python3等)は影の置き場へのsymlinkで残す。CIではpipで
+# 入れた実物のsemgrepがPATH上にあるため、スタブを置かないだけでは「不在」にならない。
+hide_tool() {
+	local tool="$1" shadow="${TEST_TMPDIR}/shadow-bin" dir file new_path="" IFS=:
+	mkdir -p "${shadow}"
+	for dir in ${PATH}; do
+		if [ -x "${dir}/${tool}" ]; then
+			for file in "${dir}"/*; do
+				[ -x "${file}" ] && [ "${file##*/}" != "${tool}" ] && ln -sf "${file}" "${shadow}/${file##*/}"
+			done
+			continue
+		fi
+		new_path="${new_path:+${new_path}:}${dir}"
+	done
+	export PATH="${new_path}:${shadow}"
+	if command -v "${tool}" >/dev/null 2>&1; then
+		echo "hide_tool: ${tool} がまだPATH上にあります" >&2
+		return 1
+	fi
+}
+
 stub_docker_image_exists() {
 	cat > "${STUB_BIN}/docker" <<'EOF'
 #!/usr/bin/env bash
@@ -91,9 +113,10 @@ EOF
 exit 0
 EOF
 	chmod +x "${STUB_BIN}/cppcheck"
+	hide_tool semgrep
 	run bash scripts/scan-sast.sh "${TEST_TMPDIR}"
 	[ "$status" -ne 0 ]
-	[[ "$output" == *"semgrep"* ]]
+	[[ "$output" == *"semgrep が見つかりません"* ]]
 }
 
 @test "scan-sast.sh: 正常系ではSemgrep/cppcheck双方のPass判定を出力する" {
@@ -270,4 +293,14 @@ CPPCHECK_FINDING_XML='<results version="2"><errors><error id="nullPointer" sever
 	run bash scripts/scan-sast.sh
 	[ "$status" -ne 0 ]
 	[[ "$output" == *"fetch-depth: 0"* ]]
+}
+
+@test "scan-sast.sh(patched): ソースがリポジトリ外でgitが失敗した場合、Passにせず停止する" {
+	make_sast_repo
+	stub_sast_tools
+	cd "${SAST_REPO}"
+	run bash scripts/scan-sast.sh "${TEST_TMPDIR}"
+	[ "$status" -ne 0 ]
+	[[ "$output" == *"git diff"* ]]
+	[[ "$output" != *"SAST verdict: Pass"* ]]
 }

@@ -130,10 +130,14 @@ if [ "${SAST_SCOPE}" = "patched" ]; then
 	fi
 	# 変更(追加・変更・改名)されたファイル。作業ツリーの未コミット変更・未追跡ファイルも含める。
 	# サードパーティのvendor配下は依存関係スキャン(SCA)の対象であり、SASTの対象外とする。
-	{
-		git diff --name-only --diff-filter=AMR "${IMPORT_REF}" -- "${SOURCE_DIR}"
-		git ls-files --others --exclude-standard -- "${SOURCE_DIR}"
-	} | sort -u | grep -Ev '(^|/)vendor/' > "${PATCHED_LIST}" || true
+	# gitコマンドの失敗を「変更ファイルなし=Pass」と取り違えないよう、パイプの外で終了コードを見る。
+	CHANGED_TRACKED="$(git diff --name-only --diff-filter=AMR "${IMPORT_REF}" -- "${SOURCE_DIR}")" \
+		|| fail "変更ファイルの取得(git diff)に失敗しました。'${SOURCE_DIR}' がこのリポジトリ内にあるか確認してください。"
+	CHANGED_UNTRACKED="$(git ls-files --others --exclude-standard -- "${SOURCE_DIR}")" \
+		|| fail "未追跡ファイルの取得(git ls-files)に失敗しました。"
+	# grepは1行も残らないとき終了コード1を返すため、`|| true` はこの1段にだけ付ける。
+	printf '%s\n%s\n' "${CHANGED_TRACKED}" "${CHANGED_UNTRACKED}" \
+		| sed '/^$/d' | sort -u | { grep -Ev '(^|/)vendor/' || true; } > "${PATCHED_LIST}"
 
 	echo "=================================================================="
 	echo "SAST scope: patched(上流インポート ${IMPORT_REF:0:12} からの変更ファイル: $(wc -l < "${PATCHED_LIST}" | tr -d ' ')件)"
