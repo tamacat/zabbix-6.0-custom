@@ -159,7 +159,7 @@ jobs:
       - name: Install Python dependencies
         run: pip install PyYAML
 
-      - uses: sigstore/cosign-installer@v4
+      - uses: sigstore/cosign-installer@v4.1.2
 
       - uses: actions/download-artifact@v8
         with:
