@@ -83,7 +83,7 @@ EOF
 @test "scan-sca.sh: trivyが見つからない場合エラーで停止する" {
 	cd "${REPO_ROOT}"
 	stub_docker_image_exists
-	run bash scripts/scan-sca.sh tamacat/zabbix-server:6.0.48-r20260920-amd64
+	run bash scripts/scan-sca.sh tamacat/zabbix-server-mysql:6.0.48-alpine-b20260920
 	[ "$status" -ne 0 ]
 	[[ "$output" == *"trivy"* ]]
 }
@@ -92,7 +92,7 @@ EOF
 	cd "${REPO_ROOT}"
 	stub_docker_image_missing
 	stub_trivy_empty_results
-	run bash scripts/scan-sca.sh tamacat/zabbix-server:6.0.48-r20260920-amd64
+	run bash scripts/scan-sca.sh tamacat/zabbix-server-mysql:6.0.48-alpine-b20260920
 	[ "$status" -ne 0 ]
 	[[ "$output" == *"見つかりません"* ]]
 }
@@ -101,7 +101,7 @@ EOF
 	cd "${REPO_ROOT}"
 	stub_docker_image_exists
 	stub_trivy_empty_results
-	run bash scripts/scan-sca.sh tamacat/zabbix-server:6.0.48-r20260920-amd64
+	run bash scripts/scan-sca.sh tamacat/zabbix-server-mysql:6.0.48-alpine-b20260920
 	[ "$status" -eq 0 ]
 	[[ "$output" == *"SCA verdict: Pass"* ]]
 }

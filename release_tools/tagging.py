@@ -1,9 +1,10 @@
 """ImagePublisher — タグ生成(BR4.1)と公開直前セルフレビュー確認(BR3.2)。
 
-タグ形式(BR4.1):
-`tamacat/zabbix-<component>:<zabbix-version>-r<YYYYMMDD>-<arch>`
-(例: `6.0.48-r20260919-amd64`)。コード変更を伴わない定期再ビルドでも
-ビルド日付が異なる限りタグが衝突しないこと、および `latest` のような
+公開名・タグ形式(BR4.1)は zabbix-5.0-custom と同じ規約に揃える:
+`tamacat/<リポジトリ名>:<zabbix-version>-alpine-b<YYYYMMDD>`
+(例: `tamacat/zabbix-server-mysql:6.0.48-alpine-b20260919`)。リポジトリ名は公式の
+zabbix/zabbix-* イメージと同じ(models.IMAGE_REPOSITORIES)。コード変更を伴わない
+定期再ビルドでもビルド日付が異なる限りタグが衝突しないこと、および `latest` のような
 floatingタグを一切生成しないことを保証する。
 """
 from __future__ import annotations
@@ -11,37 +12,31 @@ from __future__ import annotations
 import re
 from typing import Callable, Optional
 
-from .models import ARCHITECTURES, COMPONENT_NAMES
+from .models import ARCHITECTURES, COMPONENT_NAMES, IMAGE_REPOSITORIES, REGISTRY_NAMESPACE
 
-TAG_PREFIX = "tamacat/zabbix-"
 _BUILD_DATE_PATTERN = re.compile(r"^\d{8}$")
 _ZABBIX_VERSION_PATTERN = re.compile(r"^\d+\.\d+\.\d+$")
-_VERSION_SUFFIX_PATTERN = re.compile(r"^\d+\.\d+\.\d+-r\d{8}-[a-z0-9]+$")
+_VERSION_SUFFIX_PATTERN = re.compile(r"^\d+\.\d+\.\d+-alpine-b\d{8}$")
 
 
-def short_component_name(component: str) -> str:
-    """component_name("zabbix-server"等)からタグ用の短縮名("server"等)を導出する。
-
-    Key Decision: component_nameは既に"zabbix-"を含む(例: "zabbix-server")。
-    BR4.1の擬似コード `image_tag = 'tamacat/zabbix-' + component_name + ...` を
-    そのまま逐語適用すると "tamacat/zabbix-zabbix-server" のような二重prefixに
-    なってしまい、FR6.2が明示的に踏襲を指示するzabbix-5.0の前例
-    (`tamacat/zabbix-server-mysql`等、"zabbix-"は1回だけ)と矛盾する。よって
-    タグ生成時のみ、component_nameから先頭の"zabbix-"を取り除いた短縮名を
-    使用する(component_name自体は変更しない)。
-    """
-    prefix = "zabbix-"
-    return component[len(prefix):] if component.startswith(prefix) else component
+def image_repository(component: str) -> str:
+    """component_name("zabbix-server"等)から、Docker Hub上のリポジトリ名
+    ("tamacat/zabbix-server-mysql"等)を返す。"""
+    if component not in COMPONENT_NAMES:
+        raise ValueError(f"未対応のコンポーネントです: {component!r}(許可値: {COMPONENT_NAMES})")
+    return f"{REGISTRY_NAMESPACE}/{IMAGE_REPOSITORIES[component]}"
 
 
 def generate_tag(component: str, zabbix_version: str, build_date: str, arch: str = "amd64") -> str:
-    """BR4.1に従い `tamacat/zabbix-<component>:<zabbix_version>-r<build_date>-<arch>` を生成する。
+    """BR4.1に従い `tamacat/<リポジトリ名>:<zabbix_version>-alpine-b<build_date>` を生成する。
 
     build_dateは常にYYYYMMDD(ビルド実行日)の8桁でなければならず、"latest" 等の
     floatingタグは決して生成しない(不正な入力はValueErrorで拒否する)。
+
+    archはタグには含めない(zabbix-5.0-customと同じ形式)。BR5.2(初回リリースはamd64のみ)を
+    ここで強制するための検証にだけ使う。
     """
-    if component not in COMPONENT_NAMES:
-        raise ValueError(f"未対応のコンポーネントです: {component!r}(許可値: {COMPONENT_NAMES})")
+    repository = image_repository(component)
     if arch not in ARCHITECTURES:
         raise ValueError(f"BR5.2違反: 初回リリースはamd64のみ対応です: {arch!r}")
     if not zabbix_version or not _ZABBIX_VERSION_PATTERN.match(zabbix_version):
@@ -49,8 +44,7 @@ def generate_tag(component: str, zabbix_version: str, build_date: str, arch: str
     if not build_date or not _BUILD_DATE_PATTERN.match(build_date):
         raise ValueError(f"build_date はYYYYMMDD形式の8桁でなければなりません: {build_date!r}")
 
-    version_suffix = f"{zabbix_version}-r{build_date}-{arch}"
-    tag = f"{TAG_PREFIX}{short_component_name(component)}:{version_suffix}"
+    tag = f"{repository}:{zabbix_version}-alpine-b{build_date}"
     if is_floating_tag(tag):
         # 上記の検証を通過した組み立て済みタグがfloating判定になることは通常起こり得ないが、
         # 「latestのようなfloatingタグを生成しないことをコードで保証する」(Step 5.2)という

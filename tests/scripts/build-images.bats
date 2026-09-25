@@ -76,9 +76,9 @@ teardown() {
 		bash scripts/build-images.sh
 
 	[ "$status" -eq 0 ]
-	[[ "$output" == *"tamacat/zabbix-server:6.0.48-r20260920-amd64"* ]]
-	[[ "$output" == *"tamacat/zabbix-web:6.0.48-r20260920-amd64"* ]]
-	[[ "$output" == *"tamacat/zabbix-agent2:6.0.48-r20260920-amd64"* ]]
-	[[ "$output" == *"tamacat/zabbix-proxy:6.0.48-r20260920-amd64"* ]]
+	[[ "$output" == *"tamacat/zabbix-server-mysql:6.0.48-alpine-b20260920"* ]]
+	[[ "$output" == *"tamacat/zabbix-web-nginx-mysql:6.0.48-alpine-b20260920"* ]]
+	[[ "$output" == *"tamacat/zabbix-agent2:6.0.48-alpine-b20260920"* ]]
+	[[ "$output" == *"tamacat/zabbix-proxy-sqlite3:6.0.48-alpine-b20260920"* ]]
 	[[ "$output" == *"STUB docker build"* ]]
 }

@@ -130,8 +130,16 @@ def test_fixed_status_survives_expired_waiver_via_scan_gate_cli(tmp_path, capsys
     assert reloaded.get_vulnerability("CVE-2026-00003").status == "Fixed"
 
 
-@pytest.mark.parametrize("component", ["zabbix-server", "zabbix-web", "zabbix-agent2", "zabbix-proxy"])
-def test_generate_tag_via_cli_matches_br41_format(component, capsys):
+@pytest.mark.parametrize(
+    "component, repository",
+    [
+        ("zabbix-server", "zabbix-server-mysql"),
+        ("zabbix-web", "zabbix-web-nginx-mysql"),
+        ("zabbix-agent2", "zabbix-agent2"),
+        ("zabbix-proxy", "zabbix-proxy-sqlite3"),
+    ],
+)
+def test_generate_tag_via_cli_matches_br41_format(component, repository, capsys):
     exit_code, out = _run(None, capsys, [
         "generate-tag",
         "--component", component,
@@ -139,5 +147,4 @@ def test_generate_tag_via_cli_matches_br41_format(component, capsys):
         "--build-date", "20260920",
     ])
     assert exit_code == 0
-    short = component.removeprefix("zabbix-")
-    assert out.strip() == f"tamacat/zabbix-{short}:6.0.48-r20260920-amd64"
+    assert out.strip() == f"tamacat/{repository}:6.0.48-alpine-b20260920"

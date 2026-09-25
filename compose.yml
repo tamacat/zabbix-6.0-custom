@@ -37,7 +37,7 @@ services:
       args:
         ZABBIX_SRC_DIR: ${ZABBIX_SRC_DIR:-sources/zabbix-6.0.48}
         ALPINE_VERSION: ${ALPINE_VERSION:-3.24}
-    image: tamacat/zabbix-server:${ZABBIX_IMAGE_TAG:-6.0-custom}
+    image: tamacat/zabbix-server-mysql:${ZABBIX_IMAGE_TAG:-6.0-custom}
     container_name: zabbix-server
     networks:
       - zbxnet
@@ -62,7 +62,7 @@ services:
       args:
         ZABBIX_SRC_DIR: ${ZABBIX_SRC_DIR:-sources/zabbix-6.0.48}
         ALPINE_VERSION: ${ALPINE_VERSION:-3.24}
-    image: tamacat/zabbix-web:${ZABBIX_IMAGE_TAG:-6.0-custom}
+    image: tamacat/zabbix-web-nginx-mysql:${ZABBIX_IMAGE_TAG:-6.0-custom}
     container_name: zabbix-web
     networks:
       - zbxnet
@@ -112,7 +112,7 @@ services:
       args:
         ZABBIX_SRC_DIR: ${ZABBIX_SRC_DIR:-sources/zabbix-6.0.48}
         ALPINE_VERSION: ${ALPINE_VERSION:-3.24}
-    image: tamacat/zabbix-proxy:${ZABBIX_IMAGE_TAG:-6.0-custom}
+    image: tamacat/zabbix-proxy-sqlite3:${ZABBIX_IMAGE_TAG:-6.0-custom}
     container_name: zabbix-proxy
     networks:
       - zbxnet

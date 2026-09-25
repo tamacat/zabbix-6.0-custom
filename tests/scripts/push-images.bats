@@ -33,7 +33,7 @@ teardown() {
 @test "BR3.1未達(SASTがFail)の場合、docker pushへ進まない" {
 	cd "${REPO_ROOT}"
 	run bash scripts/push-images.sh \
-		--tag tamacat/zabbix-server:6.0.48-r20260920-amd64 \
+		--tag tamacat/zabbix-server-mysql:6.0.48-alpine-b20260920 \
 		--sca Pass --sast Fail --compat Pass --secret Clean --yes
 
 	[ "$status" -ne 0 ]
@@ -44,7 +44,7 @@ teardown() {
 @test "BR3.2未承認(セルフレビュー拒否)の場合、docker pushへ進まない" {
 	cd "${REPO_ROOT}"
 	run bash scripts/push-images.sh \
-		--tag tamacat/zabbix-server:6.0.48-r20260920-amd64 \
+		--tag tamacat/zabbix-server-mysql:6.0.48-alpine-b20260920 \
 		--sca Pass --sast Pass --compat Pass --secret Clean --no
 
 	[ "$status" -ne 0 ]
@@ -55,10 +55,10 @@ teardown() {
 @test "BR3.1・BR3.2をいずれも満たす場合はdocker pushを実行する" {
 	cd "${REPO_ROOT}"
 	run bash scripts/push-images.sh \
-		--tag tamacat/zabbix-server:6.0.48-r20260920-amd64 \
+		--tag tamacat/zabbix-server-mysql:6.0.48-alpine-b20260920 \
 		--sca Pass --sast Pass --compat Pass --secret Clean --yes
 
 	[ "$status" -eq 0 ]
 	[ -f "${TEST_TMPDIR}/docker-calls.log" ]
-	grep -q "push tamacat/zabbix-server:6.0.48-r20260920-amd64" "${TEST_TMPDIR}/docker-calls.log"
+	grep -q "push tamacat/zabbix-server-mysql:6.0.48-alpine-b20260920" "${TEST_TMPDIR}/docker-calls.log"
 }

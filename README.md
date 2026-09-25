@@ -43,8 +43,9 @@ scanned, published image. It implements six components:
   environment variable/volume compatibility, logging `docker stats
   --no-stream` as a reference observation (not itself a release gate).
 - **ImagePublisher** (`release_tools/tagging.py`, `scripts/push-images.sh`) —
-  generates the `tamacat/zabbix-<component>:<version>-r<YYYYMMDD>-<arch>`
-  tag (never a floating tag such as `latest`), enforces the 4-condition
+  generates the `tamacat/<repository>:<version>-alpine-b<YYYYMMDD>`
+  tag (never a floating tag such as `latest`; same repositories and tag format as
+  `zabbix-5.0-custom`), enforces the 4-condition
   publish gate (SCA pass, SAST pass, compatibility pass, secrets clean) plus
   an explicit self-review confirmation before `docker push`, then attempts
   cosign keyless signing and SBOM attestation against the published registry
@@ -117,6 +118,29 @@ Once the Zabbix source is present:
 See [`docs/CONTRIBUTING.md`](docs/CONTRIBUTING.md) for the commit-message
 CVE/GHSA traceability convention and the code-style tracks (patches to
 upstream Zabbix source vs. this project's own build/CI layer).
+
+## Docker Hub
+
+Pre-built images are published to the same Docker Hub repositories that
+`zabbix-5.0-custom` uses, named after the official `zabbix/*` images, so a 6.0
+tag sits next to the 5.0 ones in each repository:
+
+| Component | Docker Hub |
+|---|---|
+| zabbix-server (MySQL) | [tamacat/zabbix-server-mysql](https://hub.docker.com/r/tamacat/zabbix-server-mysql) |
+| zabbix-web (nginx, MySQL) | [tamacat/zabbix-web-nginx-mysql](https://hub.docker.com/r/tamacat/zabbix-web-nginx-mysql) |
+| zabbix-agent2 | [tamacat/zabbix-agent2](https://hub.docker.com/r/tamacat/zabbix-agent2) |
+| zabbix-proxy (SQLite3) | [tamacat/zabbix-proxy-sqlite3](https://hub.docker.com/r/tamacat/zabbix-proxy-sqlite3) |
+
+Tag format: `<zabbix-version>-alpine-b<build-date>`, the same for all four images
+(there are no floating tags such as `latest`), e.g.:
+
+```bash
+docker pull tamacat/zabbix-server-mysql:6.0.48-alpine-b20260925
+```
+
+Images are signed with cosign (keyless) and carry a CycloneDX SBOM attestation;
+publishing waits for approval on the `production` GitHub Environment.
 
 ## First-time database setup (manual)
 

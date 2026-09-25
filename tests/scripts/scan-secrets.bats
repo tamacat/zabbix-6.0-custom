@@ -112,7 +112,7 @@ EOF
 
 @test "gitleaksが見つからない場合エラーで停止する" {
 	cd "${REPO_ROOT}"
-	run bash scripts/scan-secrets.sh tamacat/zabbix-server:6.0.48-r20260920-amd64
+	run bash scripts/scan-secrets.sh tamacat/zabbix-server-mysql:6.0.48-alpine-b20260920
 	[ "$status" -ne 0 ]
 	[[ "$output" == *"gitleaks"* ]]
 }
@@ -120,7 +120,7 @@ EOF
 @test "Git差分・イメージレイヤーの両方がCleanならCleanと判定する" {
 	cd "${REPO_ROOT}"
 	stub_gitleaks clean clean
-	run bash scripts/scan-secrets.sh tamacat/zabbix-server:6.0.48-r20260920-amd64
+	run bash scripts/scan-secrets.sh tamacat/zabbix-server-mysql:6.0.48-alpine-b20260920
 	[ "$status" -eq 0 ]
 	[[ "$output" == *"result: Clean"* ]]
 }
@@ -128,7 +128,7 @@ EOF
 @test "Git差分がBlockedならCI全体としてBlockedになる" {
 	cd "${REPO_ROOT}"
 	stub_gitleaks blocked clean
-	run bash scripts/scan-secrets.sh tamacat/zabbix-server:6.0.48-r20260920-amd64
+	run bash scripts/scan-secrets.sh tamacat/zabbix-server-mysql:6.0.48-alpine-b20260920
 	[ "$status" -ne 0 ]
 	[[ "$output" == *"Git差分・履歴スキャン: Blocked"* ]]
 	[[ "$output" == *"result: Blocked"* ]]
@@ -137,7 +137,7 @@ EOF
 @test "イメージレイヤースキャンがBlockedならCI全体としてBlockedになる" {
 	cd "${REPO_ROOT}"
 	stub_gitleaks clean blocked
-	run bash scripts/scan-secrets.sh tamacat/zabbix-server:6.0.48-r20260920-amd64
+	run bash scripts/scan-secrets.sh tamacat/zabbix-server-mysql:6.0.48-alpine-b20260920
 	[ "$status" -ne 0 ]
 	[[ "$output" == *"イメージレイヤースキャン"*"Blocked"* ]]
 	[[ "$output" == *"result: Blocked"* ]]
@@ -146,7 +146,7 @@ EOF
 @test "イメージのレイヤー(新形式 blobs/sha256/<hash>)を展開し、その中身をgitleaksへ渡す" {
 	cd "${REPO_ROOT}"
 	stub_gitleaks clean clean
-	run bash scripts/scan-secrets.sh tamacat/zabbix-server:6.0.48-r20260920-amd64
+	run bash scripts/scan-secrets.sh tamacat/zabbix-server-mysql:6.0.48-alpine-b20260920
 	[ "$status" -eq 0 ]
 	[[ "$output" == *"展開したレイヤー数: 1"* ]]
 	grep -qx "app/config.txt" "${TEST_TMPDIR}/image-scanned-files.log"
@@ -155,7 +155,7 @@ EOF
 @test "イメージのレイヤー(旧形式 <id>/layer.tar)も展開し、その中身をgitleaksへ渡す" {
 	cd "${REPO_ROOT}"
 	stub_gitleaks clean clean
-	run env STUB_IMAGE_LAYOUT=classic bash scripts/scan-secrets.sh tamacat/zabbix-server:6.0.48-r20260920-amd64
+	run env STUB_IMAGE_LAYOUT=classic bash scripts/scan-secrets.sh tamacat/zabbix-server-mysql:6.0.48-alpine-b20260920
 	[ "$status" -eq 0 ]
 	grep -qx "app/config.txt" "${TEST_TMPDIR}/image-scanned-files.log"
 }
@@ -163,7 +163,7 @@ EOF
 @test "レイヤーが1枚も展開できないイメージは、空をスキャンしてCleanにせず停止する" {
 	cd "${REPO_ROOT}"
 	stub_gitleaks clean clean
-	run env STUB_IMAGE_LAYOUT=empty bash scripts/scan-secrets.sh tamacat/zabbix-server:6.0.48-r20260920-amd64
+	run env STUB_IMAGE_LAYOUT=empty bash scripts/scan-secrets.sh tamacat/zabbix-server-mysql:6.0.48-alpine-b20260920
 	[ "$status" -ne 0 ]
 	[[ "$output" == *"レイヤーが1枚も展開されませんでした"* ]]
 	[[ "$output" != *"result: Clean"* ]]
@@ -172,7 +172,7 @@ EOF
 @test "docker saveの出力にmanifest.jsonがなければ、レイヤーを特定できないので停止する" {
 	cd "${REPO_ROOT}"
 	stub_gitleaks clean clean
-	run env STUB_IMAGE_LAYOUT=nomanifest bash scripts/scan-secrets.sh tamacat/zabbix-server:6.0.48-r20260920-amd64
+	run env STUB_IMAGE_LAYOUT=nomanifest bash scripts/scan-secrets.sh tamacat/zabbix-server-mysql:6.0.48-alpine-b20260920
 	[ "$status" -ne 0 ]
 	[[ "$output" == *"manifest.json がありません"* ]]
 }

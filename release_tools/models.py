@@ -25,6 +25,18 @@ from typing import List, Optional
 # --- 許可値・パターン ----------------------------------------------------------
 
 COMPONENT_NAMES = ("zabbix-server", "zabbix-web", "zabbix-agent2", "zabbix-proxy")
+
+# Docker Hubの名前空間と、コンポーネントごとのリポジトリ名。公式の zabbix/zabbix-* イメージと
+# 同じ名前を、自分の名前空間の下に置く。zabbix-5.0-custom も同じ tamacat/* リポジトリへ公開して
+# いるため、6.0 のイメージは同じリポジトリに並ぶ(タグだけが 6.0.x になる)。
+# component_name(台帳などで使う内部識別子)は変えず、公開名だけをここで対応づける。
+REGISTRY_NAMESPACE = "tamacat"
+IMAGE_REPOSITORIES = {
+    "zabbix-server": "zabbix-server-mysql",
+    "zabbix-web": "zabbix-web-nginx-mysql",
+    "zabbix-agent2": "zabbix-agent2",
+    "zabbix-proxy": "zabbix-proxy-sqlite3",
+}
 SEVERITIES = ("Critical", "High", "Medium", "Low")
 VULNERABILITY_STATUSES = ("Open", "InProgress", "Fixed", "Waived")
 WAIVER_STATUSES = ("Active", "Expired", "Superseded")
@@ -283,15 +295,11 @@ class PublishedImage:
             self.component_name in COMPONENT_NAMES,
             f"component_name は {COMPONENT_NAMES} のいずれかでなければなりません: {self.component_name!r}",
         )
-        _short_component = (
-            self.component_name[len("zabbix-"):]
-            if self.component_name.startswith("zabbix-")
-            else self.component_name
-        )
+        expected_repository = f"{REGISTRY_NAMESPACE}/{IMAGE_REPOSITORIES[self.component_name]}"
         _require(
-            self.image_tag.startswith(f"tamacat/zabbix-{_short_component}"),
-            f"BR4.1違反: image_tag は tamacat/zabbix-{_short_component} 形式でなければなりません"
-            f"(tagging.short_component_name参照): {self.image_tag!r}",
+            self.image_tag.startswith(f"{expected_repository}:"),
+            f"BR4.1違反: image_tag は {expected_repository}:<タグ> 形式でなければなりません"
+            f"(tagging.image_repository参照): {self.image_tag!r}",
         )
         _require(
             len(self.source_scan_run_ids) == 2,
