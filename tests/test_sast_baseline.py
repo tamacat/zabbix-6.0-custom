@@ -238,3 +238,24 @@ def test_scan_gate_reports_unparseable_cppcheck_xml_without_traceback(tmp_path, 
 
     assert exit_code == 1
     assert "入力の解析に失敗" in capsys.readouterr().err
+
+
+def _gate_argv(tmp_path, scan, baseline, *extra):
+    return [
+        "scan-gate", "--tool", "cppcheck", "--input", str(scan), "--baseline", str(baseline),
+        "--source-root", SOURCE_ROOT, "--registry", str(tmp_path / "registry.yaml"), *extra,
+    ]
+
+
+def test_scan_gate_reports_stale_baseline_entries_only_when_asked(tmp_path, capsys):
+    scan = _write(tmp_path, "cppcheck.xml", CPPCHECK_XML)
+    baseline = tmp_path / "baseline.json"
+    entries = build_baseline(normalize_cppcheck_findings(CPPCHECK_XML, source_root=SOURCE_ROOT))
+    entries["cppcheck|gone|src/libs/zbxdb/db.c|resolved upstream"] = 1
+    save_baseline(baseline, "cppcheck", entries)
+
+    assert cli.main(_gate_argv(tmp_path, scan, baseline)) == 0
+    assert "解消済み" not in capsys.readouterr().err  # patchedスコープ等: 一部しか見ていないので通知しない
+
+    assert cli.main(_gate_argv(tmp_path, scan, baseline, "--report-stale")) == 0
+    assert "baselineのうち1キーは解消済みです" in capsys.readouterr().err

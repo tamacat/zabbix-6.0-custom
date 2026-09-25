@@ -97,6 +97,12 @@ if [ ! -d "${SOURCE_DIR}" ]; then
 	fail "ソースディレクトリ '${SOURCE_DIR}' が見つかりません。Zabbix 6.0ソースをまだ追加していない可能性があります。"
 fi
 
+# 解消済みbaselineの通知は、ツリー全体をスキャンしたときだけ意味がある(patchedでは一部しか見ない)。
+STALE_ARGS=()
+if [ "${SAST_SCOPE}" = "full" ]; then
+	STALE_ARGS=(--report-stale)
+fi
+
 SEMGREP_BASELINE="${SAST_BASELINE_DIR}/semgrep.json"
 CPPCHECK_BASELINE="${SAST_BASELINE_DIR}/cppcheck.json"
 if [ "${UPDATE_BASELINE}" -eq 0 ]; then
@@ -177,6 +183,7 @@ else
 		--input "${SEMGREP_OUTPUT}" \
 		--baseline "${SEMGREP_BASELINE}" \
 		--source-root "${SOURCE_DIR}" \
+		${STALE_ARGS[@]+"${STALE_ARGS[@]}"} \
 		--registry "${REGISTRY_PATH}" \
 		|| SEMGREP_STATUS=$?
 	if [ "${SEMGREP_STATUS}" -eq 0 ]; then
@@ -231,6 +238,7 @@ CPPCHECK_STATUS=0
 	--input "${CPPCHECK_OUTPUT}" \
 	--baseline "${CPPCHECK_BASELINE}" \
 	--source-root "${SOURCE_DIR}" \
+	${STALE_ARGS[@]+"${STALE_ARGS[@]}"} \
 	--registry "${REGISTRY_PATH}" \
 	|| CPPCHECK_STATUS=$?
 if [ "${CPPCHECK_STATUS}" -eq 0 ]; then

@@ -140,7 +140,7 @@ def cmd_scan_gate(args: argparse.Namespace) -> int:
         except (json.JSONDecodeError, ValueError) as exc:
             print(f"scan-gate失敗: {exc}", file=sys.stderr)
             return 1
-        stale = gate_mod.stale_baseline_entries(findings, baseline)
+        stale = gate_mod.stale_baseline_entries(findings, baseline) if args.report_stale else {}
         findings = gate_mod.apply_baseline(findings, baseline)
         if stale:
             print(
@@ -244,6 +244,11 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--input", required=True, help="ツール出力ファイルのパス")
     p.add_argument("--baseline", default=None, help="SAST用: 既知の指摘のbaseline(JSON)。超過分のみゲート対象にする")
     p.add_argument("--source-root", default=None, help="SAST用: baselineキーのパスを相対化する基準ディレクトリ")
+    p.add_argument(
+        "--report-stale",
+        action="store_true",
+        help="SAST用: baselineのうち解消済みのキーを通知する(ツリー全体をスキャンした場合のみ意味がある)",
+    )
     p.add_argument("--today", default=None, help="YYYY-MM-DD(テスト・再現用、既定は本日)")
     p.add_argument("--registry", default=DEFAULT_REGISTRY_PATH)
     p.set_defaults(func=cmd_scan_gate)
