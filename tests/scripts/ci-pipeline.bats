@@ -51,7 +51,15 @@ case "$1" in
 			fi
 			prev="${arg}"
 		done
-		tar -cf "${out}" --files-from /dev/null
+		# scan-secrets.sh はmanifest.jsonのLayersからレイヤーを展開するため、最小限の実物を作る。
+		work="$(mktemp -d)"
+		mkdir -p "${work}/blobs/sha256" "${work}/layer/app"
+		echo hello > "${work}/layer/app/config.txt"
+		tar -cf "${work}/blobs/sha256/abc123" -C "${work}/layer" .
+		rm -rf "${work}/layer"
+		echo '[{"Config":"cfg","Layers":["blobs/sha256/abc123"]}]' > "${work}/manifest.json"
+		tar -cf "${out}" -C "${work}" .
+		rm -rf "${work}"
 		exit 0
 		;;
 	*)

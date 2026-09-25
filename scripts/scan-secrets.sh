@@ -23,6 +23,16 @@ if [ "$#" -lt 1 ]; then
 	fail "使用法: $0 <イメージ参照> [<イメージ参照> ...]"
 fi
 
+# `python3` という名前がPATH上に存在していても実際に動作するインタプリタとは限らない
+# (build-images.sh等と同じ判定方式)。docker saveのmanifest.jsonを読むために使う。
+if python3 -c "import sys" >/dev/null 2>&1; then
+	PY=python3
+elif python -c "import sys" >/dev/null 2>&1; then
+	PY=python
+else
+	fail "python3(またはpython)の実行可能なインタプリタが見つかりません"
+fi
+
 if ! command -v gitleaks >/dev/null 2>&1; then
 	fail "gitleaks が見つかりません。インストールしてから再実行してください(https://github.com/gitleaks/gitleaks)。"
 fi
@@ -48,21 +58,35 @@ echo "サブステップ2: イメージレイヤースキャン"
 echo "=================================================================="
 for image in "$@"; do
 	image_workdir="${WORKDIR}/$(echo "${image}" | tr '/:' '__')"
-	mkdir -p "${image_workdir}/extracted"
+	saved_dir="${image_workdir}/saved"
+	rootfs="${image_workdir}/rootfs"
+	mkdir -p "${saved_dir}" "${rootfs}"
 
 	echo "---- ${image} ----"
 	docker save "${image}" -o "${image_workdir}/image.tar" \
 		|| fail "docker save に失敗しました(${image})"
-	tar -xf "${image_workdir}/image.tar" -C "${image_workdir}/extracted"
+	tar -xf "${image_workdir}/image.tar" -C "${saved_dir}" \
+		|| fail "docker save の出力を展開できませんでした(${image})"
+	[ -f "${saved_dir}/manifest.json" ] \
+		|| fail "docker save の出力に manifest.json がありません(${image})。レイヤーを特定できないため、スキャンできません。"
 
-	# OCI/Dockerイメージのレイヤーtarを展開し、ファイルシステム内容をまとめてスキャン対象にする。
-	for layer in "${image_workdir}/extracted"/*/layer.tar; do
-		[ -f "${layer}" ] || continue
-		tar -xf "${layer}" -C "${image_workdir}/extracted" 2>/dev/null || true
-	done
+	# レイヤーの場所は docker save の形式で異なる(<id>/layer.tar・<hash>.tar・blobs/sha256/<hash>)。
+	# 固定のパターンで探すと新しい形式で1枚も見つからず、空のディレクトリをスキャンして
+	# 「Clean」になってしまうため、必ず manifest.json のLayersから展開する。
+	layer_count=0
+	while IFS= read -r layer; do
+		layer="${layer%$'\r'}" # Windows版Pythonはprintの行末にCRを付ける
+		[ -n "${layer}" ] || continue
+		[ -f "${saved_dir}/${layer}" ] || fail "manifest.json のレイヤー '${layer}' が見つかりません(${image})"
+		# 特殊ファイル(デバイスノード等)の展開エラーは、スキャン対象の内容に影響しないため許容する。
+		tar -xf "${saved_dir}/${layer}" -C "${rootfs}" 2>/dev/null || true
+		layer_count=$((layer_count + 1))
+	done < <("${PY}" -c 'import json, sys; [print(layer) for entry in json.load(open(sys.argv[1])) for layer in entry["Layers"]]' "${saved_dir}/manifest.json")
+	[ "${layer_count}" -gt 0 ] || fail "イメージ '${image}' のレイヤーが1枚も展開されませんでした。空のディレクトリをスキャンしてClean扱いにしないよう、ここで停止します。"
+	echo "  展開したレイヤー数: ${layer_count}"
 
 	image_report="${image_workdir}/gitleaks-image.json"
-	if gitleaks detect --source "${image_workdir}/extracted" --no-git --no-banner \
+	if gitleaks detect --source "${rootfs}" --no-git --no-banner \
 		--report-format json --report-path "${image_report}"; then
 		echo "イメージレイヤースキャン (${image}): Clean"
 	else

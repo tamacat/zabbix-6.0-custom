@@ -17,11 +17,15 @@ setup() {
 	# failed on GitHub Actions specifically because of this).
 	export PATH="${STUB_BIN}:$(echo "${PATH}" | sed -e 's#:/usr/local/bin:#:#g' -e 's#^/usr/local/bin:##' -e 's#:/usr/local/bin$##')"
 
-	# docker save / tar は実バイナリで十分小さく安全(空のtarを作るだけ)なので、
-	# dockerだけをスタブし、tarは実物を使う。
+	# `docker save <image> -o <path>` の出力を模す。レイヤーの置き場所は docker のバージョンで
+	# 異なるため、形式を STUB_IMAGE_LAYOUT で切り替える:
+	#   oci(既定)   blobs/sha256/<hash>(拡張子なし)  … 新しいdocker。旧実装はこれを1枚も見つけられなかった
+	#   classic     <id>/layer.tar
+	#   empty       Layersが空
+	#   nomanifest  manifest.jsonなし
+	# レイヤーには app/config.txt が1つ入っている。
 	cat > "${STUB_BIN}/docker" <<'EOF'
 #!/usr/bin/env bash
-# scan-secrets.sh は `docker save <image> -o <path>` の形式でのみ呼び出す。
 out=""
 prev=""
 for arg in "$@"; do
@@ -30,7 +34,30 @@ for arg in "$@"; do
 	fi
 	prev="${arg}"
 done
-tar -cf "${out}" --files-from /dev/null
+work="$(mktemp -d)"
+layer_src="$(mktemp -d)"
+mkdir -p "${layer_src}/app"
+echo "hello" > "${layer_src}/app/config.txt"
+case "${STUB_IMAGE_LAYOUT:-oci}" in
+	oci)
+		mkdir -p "${work}/blobs/sha256"
+		tar -cf "${work}/blobs/sha256/abc123" -C "${layer_src}" .
+		echo '[{"Config":"blobs/sha256/cfg","Layers":["blobs/sha256/abc123"]}]' > "${work}/manifest.json"
+		;;
+	classic)
+		mkdir -p "${work}/abc123"
+		tar -cf "${work}/abc123/layer.tar" -C "${layer_src}" .
+		echo '[{"Config":"cfg.json","Layers":["abc123/layer.tar"]}]' > "${work}/manifest.json"
+		;;
+	empty)
+		echo '[{"Config":"cfg.json","Layers":[]}]' > "${work}/manifest.json"
+		;;
+	nomanifest)
+		echo x > "${work}/something"
+		;;
+esac
+tar -cf "${out}" -C "${work}" .
+rm -rf "${work}" "${layer_src}"
 exit 0
 EOF
 	chmod +x "${STUB_BIN}/docker"
@@ -53,13 +80,25 @@ behaviors=(${behaviors[@]})
 behavior="\${behaviors[\$call_index]:-clean}"
 
 report_path=""
+source_dir=""
+no_git=0
 prev=""
 for arg in "\$@"; do
 	if [ "\${prev}" = "--report-path" ]; then
 		report_path="\${arg}"
 	fi
+	if [ "\${prev}" = "--source" ]; then
+		source_dir="\${arg}"
+	fi
+	if [ "\${arg}" = "--no-git" ]; then
+		no_git=1
+	fi
 	prev="\${arg}"
 done
+# イメージ層スキャン(--no-git)のとき、実際に渡されたディレクトリの中身を記録する。
+if [ "\${no_git}" = "1" ]; then
+	(cd "\${source_dir}" && find . -type f | sed "s#^\./##") >> "${TEST_TMPDIR}/image-scanned-files.log"
+fi
 [ -n "\${report_path}" ] && echo '[]' > "\${report_path}"
 
 if [ "\${behavior}" = "clean" ]; then
@@ -102,4 +141,38 @@ EOF
 	[ "$status" -ne 0 ]
 	[[ "$output" == *"イメージレイヤースキャン"*"Blocked"* ]]
 	[[ "$output" == *"result: Blocked"* ]]
+}
+
+@test "イメージのレイヤー(新形式 blobs/sha256/<hash>)を展開し、その中身をgitleaksへ渡す" {
+	cd "${REPO_ROOT}"
+	stub_gitleaks clean clean
+	run bash scripts/scan-secrets.sh tamacat/zabbix-server:6.0.48-r20260920-amd64
+	[ "$status" -eq 0 ]
+	[[ "$output" == *"展開したレイヤー数: 1"* ]]
+	grep -qx "app/config.txt" "${TEST_TMPDIR}/image-scanned-files.log"
+}
+
+@test "イメージのレイヤー(旧形式 <id>/layer.tar)も展開し、その中身をgitleaksへ渡す" {
+	cd "${REPO_ROOT}"
+	stub_gitleaks clean clean
+	run env STUB_IMAGE_LAYOUT=classic bash scripts/scan-secrets.sh tamacat/zabbix-server:6.0.48-r20260920-amd64
+	[ "$status" -eq 0 ]
+	grep -qx "app/config.txt" "${TEST_TMPDIR}/image-scanned-files.log"
+}
+
+@test "レイヤーが1枚も展開できないイメージは、空をスキャンしてCleanにせず停止する" {
+	cd "${REPO_ROOT}"
+	stub_gitleaks clean clean
+	run env STUB_IMAGE_LAYOUT=empty bash scripts/scan-secrets.sh tamacat/zabbix-server:6.0.48-r20260920-amd64
+	[ "$status" -ne 0 ]
+	[[ "$output" == *"レイヤーが1枚も展開されませんでした"* ]]
+	[[ "$output" != *"result: Clean"* ]]
+}
+
+@test "docker saveの出力にmanifest.jsonがなければ、レイヤーを特定できないので停止する" {
+	cd "${REPO_ROOT}"
+	stub_gitleaks clean clean
+	run env STUB_IMAGE_LAYOUT=nomanifest bash scripts/scan-secrets.sh tamacat/zabbix-server:6.0.48-r20260920-amd64
+	[ "$status" -ne 0 ]
+	[[ "$output" == *"manifest.json がありません"* ]]
 }

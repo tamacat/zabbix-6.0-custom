@@ -1,0 +1,45 @@
+# gitleaks: findings triaged as false positives (one exact fingerprint per line).
+#
+# Every entry below is in the unmodified upstream Zabbix 6.0.48 import (the commit named
+# in data/upstream-import-ref); none is in code this project wrote. A fingerprint is
+# <commit>:<file>:<rule>:<line>, so it silences that one finding only: a real secret added
+# to the same file later, or to any other file, is still reported.
+#
+# Do not add entries to get a red build green. Add one only after reading the flagged line
+# and confirming it is not a credential, and say why in a comment here.
+
+# Go unit-test fixture: a fixed UUID used as a sample password. (3)
+1f485e833be46dcf34a4c1fc124d977ce19ba728:sources/zabbix-6.0.48/src/go/pkg/uri/uri_test.go:generic-api-key:176
+1f485e833be46dcf34a4c1fc124d977ce19ba728:sources/zabbix-6.0.48/src/go/pkg/uri/uri_test.go:generic-api-key:264
+1f485e833be46dcf34a4c1fc124d977ce19ba728:sources/zabbix-6.0.48/src/go/pkg/uri/uri_test.go:generic-api-key:92
+
+# php-saml source: PEM header/footer *strings* used to re-wrap a key; no key material. (3)
+1f485e833be46dcf34a4c1fc124d977ce19ba728:sources/zabbix-6.0.48/ui/vendor/onelogin/php-saml/src/Saml2/Utils.php:private-key:260
+1f485e833be46dcf34a4c1fc124d977ce19ba728:sources/zabbix-6.0.48/ui/vendor/onelogin/php-saml/src/Saml2/Utils.php:private-key:267
+1f485e833be46dcf34a4c1fc124d977ce19ba728:sources/zabbix-6.0.48/ui/vendor/onelogin/php-saml/src/Saml2/Utils.php:private-key:273
+
+# Dictionary of commonly used weak passwords (Zabbix rejects them); public by design. (4)
+1f485e833be46dcf34a4c1fc124d977ce19ba728:sources/zabbix-6.0.48/ui/data/top_passwords.txt:generic-api-key:813054
+1f485e833be46dcf34a4c1fc124d977ce19ba728:sources/zabbix-6.0.48/ui/data/top_passwords.txt:generic-api-key:879701
+1f485e833be46dcf34a4c1fc124d977ce19ba728:sources/zabbix-6.0.48/ui/data/top_passwords.txt:generic-api-key:943171
+1f485e833be46dcf34a4c1fc124d977ce19ba728:sources/zabbix-6.0.48/ui/data/top_passwords.txt:generic-api-key:997772
+
+# Upstream template data (SQL): Acronis item names/keys such as 'get_token', and a fixed
+# 'X-Application-Secret: <UUID>' header value from the same template. That value is a vendor
+# constant identical in all three DB dumps and shipped publicly in every Zabbix release; it is
+# not a credential of this project. (15)
+1f485e833be46dcf34a4c1fc124d977ce19ba728:sources/zabbix-6.0.48/database/mysql/data.sql:generic-api-key:11610
+1f485e833be46dcf34a4c1fc124d977ce19ba728:sources/zabbix-6.0.48/database/mysql/data.sql:generic-api-key:11611
+1f485e833be46dcf34a4c1fc124d977ce19ba728:sources/zabbix-6.0.48/database/mysql/data.sql:generic-api-key:11612
+1f485e833be46dcf34a4c1fc124d977ce19ba728:sources/zabbix-6.0.48/database/mysql/data.sql:generic-api-key:11613
+1f485e833be46dcf34a4c1fc124d977ce19ba728:sources/zabbix-6.0.48/database/mysql/data.sql:generic-api-key:11615
+1f485e833be46dcf34a4c1fc124d977ce19ba728:sources/zabbix-6.0.48/database/oracle/data.sql:generic-api-key:47182
+1f485e833be46dcf34a4c1fc124d977ce19ba728:sources/zabbix-6.0.48/database/oracle/data.sql:generic-api-key:47186
+1f485e833be46dcf34a4c1fc124d977ce19ba728:sources/zabbix-6.0.48/database/oracle/data.sql:generic-api-key:47190
+1f485e833be46dcf34a4c1fc124d977ce19ba728:sources/zabbix-6.0.48/database/oracle/data.sql:generic-api-key:47194
+1f485e833be46dcf34a4c1fc124d977ce19ba728:sources/zabbix-6.0.48/database/oracle/data.sql:generic-api-key:47205
+1f485e833be46dcf34a4c1fc124d977ce19ba728:sources/zabbix-6.0.48/database/postgresql/data.sql:generic-api-key:50785
+1f485e833be46dcf34a4c1fc124d977ce19ba728:sources/zabbix-6.0.48/database/postgresql/data.sql:generic-api-key:50788
+1f485e833be46dcf34a4c1fc124d977ce19ba728:sources/zabbix-6.0.48/database/postgresql/data.sql:generic-api-key:50791
+1f485e833be46dcf34a4c1fc124d977ce19ba728:sources/zabbix-6.0.48/database/postgresql/data.sql:generic-api-key:50794
+1f485e833be46dcf34a4c1fc124d977ce19ba728:sources/zabbix-6.0.48/database/postgresql/data.sql:generic-api-key:50898
