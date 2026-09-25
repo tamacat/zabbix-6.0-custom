@@ -64,6 +64,31 @@ Two independent tool families are used, each for a different kind of check:
 - **SAST** (Semgrep for PHP/JS, cppcheck for C): semantic static analysis of
   the patched source itself.
 
+### How the SAST gate treats upstream code
+
+The vendored Zabbix source contains many findings that upstream never fixed
+and this project does not touch. Failing on all of them would make the gate
+impossible to pass, so SAST is gated on **new** findings only:
+
+- `data/sast-baseline/{semgrep,cppcheck}.json` records the known findings as
+  counts per tool / rule / file / message (no line numbers, so upstream line
+  shifts do not matter). Anything beyond those counts fails the gate. cppcheck
+  findings carry no CVE/GHSA ID, so they can never be waived: a finding beyond
+  the baseline always fails, and a false positive is handled by fixing the
+  configuration or by an inline `// cppcheck-suppress <id>` in the source.
+- **Scope**: on push/PR only the files changed since the unmodified upstream
+  import are analysed (`data/upstream-import-ref` names that commit, and CI
+  checks out full history for it). Scheduled and manually dispatched runs use
+  `--scope full`, which analyses the whole tree. Third-party code under
+  `vendor/` is out of scope for SAST; it is covered by SCA.
+- **Updating the baseline** is a deliberate, reviewed act, never a way to get
+  a red build green: run `./scripts/scan-sast.sh --update-baseline`, read the
+  `git diff data/sast-baseline/`, and commit only if every added entry is an
+  upstream finding you accept. A patch of ours that introduces a finding must
+  be fixed, not baselined. When moving to a later 6.0.x point release, replace
+  the tree, update `data/upstream-import-ref` to the import commit, and
+  regenerate the baseline.
+
 The release gate requires zero known Critical/High/Medium vulnerabilities,
 except for items covered by an explicit, time-boxed waiver recorded in the
 VulnerabilityRegistry (`data/vulnerability-registry.yaml`, managed via

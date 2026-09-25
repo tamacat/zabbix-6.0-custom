@@ -73,6 +73,9 @@ jobs:
       - uses: actions/checkout@v7
         with:
           submodules: recursive
+          # scripts/scan-sast.sh diffs against the upstream import commit
+          # (data/upstream-import-ref), which a shallow clone would not contain.
+          fetch-depth: 0
 
       - uses: actions/setup-python@v7
         with:
@@ -115,6 +118,10 @@ jobs:
           MYSQL_PASSWORD: ci-test-password
           MYSQL_DATABASE: zabbix
           SBOM_DIR: ${{ github.workspace }}/sbom
+          # push/PR: SAST only the files changed since the upstream import.
+          # schedule/manual: the whole tree, so drift in upstream code or in
+          # the scanners' rules surfaces on a regular cadence.
+          SAST_SCOPE: ${{ (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && 'full' || 'patched' }}
         run: ./scripts/ci-pipeline.sh
 
       - uses: actions/upload-artifact@v7

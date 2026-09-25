@@ -74,10 +74,12 @@ tar -xzf zabbix-6.0.48.tar.gz -C sources/
 
 To move to a later 6.0.x point release, repeat the same download-and-verify
 steps for the new version, replace `sources/zabbix-6.0.48/` with the new
-tree, and update `ZABBIX_VERSION`/`ZABBIX_SRC_DIR` in `.env` and
-`.env.example` accordingly (never upgrade past the 6.0.x line — see
-`docs/CONTRIBUTING.md`). Override `ZABBIX_SRC_DIR` if you place the source
-somewhere else.
+tree, commit that unmodified tree on its own, point `data/upstream-import-ref`
+at that commit (the SAST gate diffs against it), regenerate the SAST baseline
+(`./scripts/scan-sast.sh --update-baseline`), and update
+`ZABBIX_VERSION`/`ZABBIX_SRC_DIR` in `.env` and `.env.example` accordingly
+(never upgrade past the 6.0.x line — see `docs/CONTRIBUTING.md`). Override
+`ZABBIX_SRC_DIR` if you place the source somewhere else.
 
 ## Running the tools
 
@@ -100,7 +102,9 @@ Once the Zabbix source is present:
 ```bash
 ./scripts/build-images.sh      # build + tag all 4 components
 ./scripts/scan-sca.sh   <tag>  # Trivy SCA scan + gate
-./scripts/scan-sast.sh         # Semgrep + cppcheck SAST scan + gate
+./scripts/scan-sast.sh         # Semgrep + cppcheck SAST: files changed since the upstream
+                                # import, new findings only (--scope full for the whole tree;
+                                # see docs/CONTRIBUTING.md "Security scanning")
 ./scripts/scan-secrets.sh <tag> [<tag> ...]   # gitleaks, git diff + image layers
 ./scripts/compat-test.sh       # docker compose up + compatibility checklist
 ./scripts/ci-pipeline.sh       # runs the five commands above in order (build

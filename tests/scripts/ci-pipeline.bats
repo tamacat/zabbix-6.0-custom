@@ -29,6 +29,13 @@ setup() {
 	SRC_DIR="${TEST_TMPDIR}/sources/zabbix-6.0.48"
 	mkdir -p "${SRC_DIR}"
 
+	# SAST: ソースがgitリポジトリ外のため全体スキャン+空のbaselineで実行する。
+	BASELINE_DIR="${TEST_TMPDIR}/baselines"
+	mkdir -p "${BASELINE_DIR}"
+	for tool in semgrep cppcheck; do
+		printf '{"version": 1, "tool": "%s", "note": "", "entries": {}}\n' "${tool}" > "${BASELINE_DIR}/${tool}.json"
+	done
+
 	# docker: build / image inspect / save / compose / stats のすべてに成功で応答する
 	# 汎用スタブ(build-images.bats・scan-runner.bats・scan-secrets.bats・
 	# compat-test.batsのスタブを1つに統合)。
@@ -132,6 +139,8 @@ run_pipeline() {
 		DB_SERVER_HOST=mysql.example.internal \
 		MYSQL_PASSWORD=secret \
 		REGISTRY_PATH="${REGISTRY_PATH}" \
+		SAST_SCOPE=full \
+		SAST_BASELINE_DIR="${BASELINE_DIR}" \
 		bash scripts/ci-pipeline.sh
 }
 

@@ -211,6 +211,8 @@ class Finding:
     # 明記されていないが、relationshipsで定義された「Finding may correspond to one
     # known Vulnerability」を実装するための相関キーとして追加した。
     cve_id: Optional[str] = None
+    # SASTのbaseline照合用の、行番号に依存しない安定キー(gate.pyが設定する)。
+    baseline_key: Optional[str] = None
 
     def __post_init__(self) -> None:
         _require(self.severity in SEVERITIES, f"severity は {SEVERITIES} のいずれかでなければなりません: {self.severity!r}")
