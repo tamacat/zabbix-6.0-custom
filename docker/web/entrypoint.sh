@@ -40,7 +40,10 @@ echo "**** Applying PHP_TZ=${PHP_TZ} to date.timezone..."
 # fails here with a permission error. Read + rewrite through a shell variable
 # instead: that only needs to open the already zabbix-owned file for writing,
 # never touching the directory.
-ZBX_INI_CONTENT="$(sed "s/^date.timezone = .*/date.timezone = ${PHP_TZ}/" /etc/php83/conf.d/99-zabbix.ini)"
+# sedの区切り文字を`/`以外(`|`)にする — PHP_TZはAsia/Tokyoのように`/`を含むのが
+# 通常であり、`/`区切りのままでは置換文字列側の`/`がsedコマンドの区切りと衝突して
+# 構文エラーになる(既定値UTCには`/`が無いため、これまで表面化していなかった)。
+ZBX_INI_CONTENT="$(sed "s|^date.timezone = .*|date.timezone = ${PHP_TZ}|" /etc/php83/conf.d/99-zabbix.ini)"
 printf '%s\n' "${ZBX_INI_CONTENT}" > /etc/php83/conf.d/99-zabbix.ini
 
 echo "**** Generating ${CONFIG_FILE} from environment variables..."
