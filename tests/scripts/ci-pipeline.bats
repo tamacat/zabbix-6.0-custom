@@ -139,6 +139,38 @@ teardown() {
 	rm -rf "${TEST_TMPDIR}"
 }
 
+# 「ツールが無い」状況を再現する。PATHからそのツールを提供するディレクトリを外し、同じ
+# ディレクトリにある他の実行ファイルは影の置き場へのsymlinkで残す。開発機にscoop等で
+# 実物のtrivyが/usr/local/bin以外へ入っていることがあり、スタブを置かないだけでは
+# 「不在」にならない(scan-runner.batsのsemgrepのテストと同じ理由)。
+hide_tool() {
+	local tool="$1" shadow="${TEST_TMPDIR}/shadow-bin" dir file base new_path="" IFS=:
+	mkdir -p "${shadow}"
+	for dir in ${PATH}; do
+		if [ -x "${dir}/${tool}" ]; then
+			for file in "${dir}"/*; do
+				[ -e "${file}" ] || continue
+				base="${file##*/}"
+				# Windowsの実行ファイルは拡張子違いの別名(trivy.exe, trivy.shim等)が
+				# 別ファイルの実体として存在する。拡張子を含めた完全一致だけを見ると
+				# それらを見逃して隠しきれないため、拡張子を除いた名前で比較する
+				# (scoopでインストールしたtrivyで実際に再現した不具合)。
+				case "${base}" in
+					"${tool}" | "${tool}".*) continue ;;
+				esac
+				[ -x "${file}" ] && ln -sf "${file}" "${shadow}/${base}"
+			done
+			continue
+		fi
+		new_path="${new_path:+${new_path}:}${dir}"
+	done
+	export PATH="${new_path}:${shadow}"
+	if command -v "${tool}" >/dev/null 2>&1; then
+		echo "hide_tool: ${tool} がまだPATH上にあります" >&2
+		return 1
+	fi
+}
+
 run_pipeline() {
 	env \
 		ZABBIX_VERSION=6.0.48 \
@@ -163,6 +195,7 @@ run_pipeline() {
 @test "trivyが見つからない場合エラーで停止する" {
 	cd "${REPO_ROOT}"
 	rm -f "${STUB_BIN}/trivy"
+	hide_tool trivy
 	run run_pipeline
 	[ "$status" -ne 0 ]
 	[[ "$output" == *"trivy"* ]]
