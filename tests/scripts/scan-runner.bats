@@ -28,12 +28,21 @@ teardown() {
 # ディレクトリにある他の実行ファイル(python3等)は影の置き場へのsymlinkで残す。CIではpipで
 # 入れた実物のsemgrepがPATH上にあるため、スタブを置かないだけでは「不在」にならない。
 hide_tool() {
-	local tool="$1" shadow="${TEST_TMPDIR}/shadow-bin" dir file new_path="" IFS=:
+	local tool="$1" shadow="${TEST_TMPDIR}/shadow-bin" dir file base new_path="" IFS=:
 	mkdir -p "${shadow}"
 	for dir in ${PATH}; do
 		if [ -x "${dir}/${tool}" ]; then
 			for file in "${dir}"/*; do
-				[ -x "${file}" ] && [ "${file##*/}" != "${tool}" ] && ln -sf "${file}" "${shadow}/${file##*/}"
+				[ -e "${file}" ] || continue
+				base="${file##*/}"
+				# Windowsの実行ファイルは拡張子違いの別名(trivy.exe, trivy.shim等)が
+				# 別ファイルの実体として存在する。拡張子を含めた完全一致だけを見ると
+				# それらを見逃して隠しきれないため、拡張子を除いた名前で比較する
+				# (scoopでインストールしたtrivyで実際に再現した不具合)。
+				case "${base}" in
+					"${tool}" | "${tool}".*) continue ;;
+				esac
+				[ -x "${file}" ] && ln -sf "${file}" "${shadow}/${base}"
 			done
 			continue
 		fi
@@ -83,6 +92,9 @@ EOF
 @test "scan-sca.sh: trivyが見つからない場合エラーで停止する" {
 	cd "${REPO_ROOT}"
 	stub_docker_image_exists
+	# ただスタブを置かないだけでは「不在」にならない(開発機にscoop等で実物のtrivyが
+	# 入っていることがある)。semgrepのテストと同じくhide_toolでPATHから確実に外す。
+	hide_tool trivy
 	run bash scripts/scan-sca.sh tamacat/zabbix-server-mysql:6.0.48-alpine-b20260920
 	[ "$status" -ne 0 ]
 	[[ "$output" == *"trivy"* ]]
@@ -192,13 +204,14 @@ make_sast_repo() {
 	# scan-sast.sh+release_toolsだけを持つ隔離gitリポジトリ。初回コミットを上流インポートとみなす。
 	SAST_REPO="${TEST_TMPDIR}/repo"
 	local src="${SAST_REPO}/sources/zabbix-6.0.48"
-	mkdir -p "${SAST_REPO}/scripts" "${src}/src/libs" "${src}/src/go/vendor/x" "${src}/ui"
+	mkdir -p "${SAST_REPO}/scripts" "${src}/src/libs" "${src}/src/go/vendor/x" "${src}/ui/js/vendors"
 	cp "${REPO_ROOT}/scripts/scan-sast.sh" "${SAST_REPO}/scripts/"
 	cp -r "${REPO_ROOT}/release_tools" "${SAST_REPO}/"
 	echo 'int a;' > "${src}/src/libs/a.c"
 	echo 'int b;' > "${src}/src/libs/b.c"
 	echo 'int v;' > "${src}/src/go/vendor/x/v.c"
 	echo '<?php echo 1;' > "${src}/ui/index.php"
+	echo 'var lib = 1;' > "${src}/ui/js/vendors/lib.js"
 	write_baseline semgrep "${SAST_REPO}/data/sast-baseline" '{}'
 	write_baseline cppcheck "${SAST_REPO}/data/sast-baseline" '{}'
 	export GIT_AUTHOR_NAME=t GIT_AUTHOR_EMAIL=t@example.com GIT_COMMITTER_NAME=t GIT_COMMITTER_EMAIL=t@example.com
@@ -235,9 +248,34 @@ CPPCHECK_FINDING_XML='<results version="2"><errors><error id="nullPointer" sever
 	[ "$status" -ne 0 ]
 	run grep -q "vendor" "${TEST_TMPDIR}/cppcheck-calls.log"
 	[ "$status" -ne 0 ]
+	# semgrepへは常に --exclude vendor/vendors が付くので「vendorという語が出ない」ことではなく、
+	# vendor配下のファイルが --include の対象になっていないことを確認する。
 	grep -q -- "--include sources/zabbix-6.0.48/ui/index.php" "${TEST_TMPDIR}/semgrep-calls.log"
-	run grep -q "vendor" "${TEST_TMPDIR}/semgrep-calls.log"
+	run grep -q -- "--include sources/zabbix-6.0.48/src/go/vendor" "${TEST_TMPDIR}/semgrep-calls.log"
 	[ "$status" -ne 0 ]
+}
+
+@test "scan-sast.sh(patched): ui/js/vendors のような複数形のvendorディレクトリも対象外にする" {
+	make_sast_repo
+	stub_sast_tools
+	cd "${SAST_REPO}"
+	mkdir -p sources/zabbix-6.0.48/ui/js/vendors
+	echo 'var x = 1;' > sources/zabbix-6.0.48/ui/js/vendors/lib.js
+	git add sources/zabbix-6.0.48/ui/js/vendors/lib.js
+	run bash scripts/scan-sast.sh
+	[ "$status" -eq 0 ]
+	[[ "$output" == *"変更ファイル: 0件"* ]]
+	[ ! -f "${TEST_TMPDIR}/semgrep-calls.log" ]
+}
+
+@test "scan-sast.sh: semgrepの呼び出しには常に --exclude vendor/vendors が付く" {
+	make_sast_repo
+	stub_sast_tools
+	cd "${SAST_REPO}"
+	echo 'int a2;' >> sources/zabbix-6.0.48/src/libs/a.c
+	run bash scripts/scan-sast.sh
+	[ "$status" -eq 0 ]
+	grep -q -- "--exclude vendor --exclude vendors" "${TEST_TMPDIR}/semgrep-calls.log"
 }
 
 @test "scan-sast.sh(patched): baseline外の新規cppcheck指摘があればFailし、指摘を表示する" {
@@ -266,13 +304,22 @@ CPPCHECK_FINDING_XML='<results version="2"><errors><error id="nullPointer" sever
 	[[ "$output" == *"cppcheck verdict: Pass"* ]]
 }
 
-@test "scan-sast.sh(full): vendor配下を除いてツリー全体をcppcheckへ渡す" {
+@test "scan-sast.sh(full): vendor/vendors配下を除いてツリー全体をcppcheckへ渡す" {
 	make_sast_repo
 	stub_sast_tools
 	cd "${SAST_REPO}"
 	run bash scripts/scan-sast.sh --scope full
 	[ "$status" -eq 0 ]
 	grep -q -- "-i sources/zabbix-6.0.48/src/go/vendor" "${TEST_TMPDIR}/cppcheck-calls.log"
+}
+
+@test "scan-sast.sh(full): semgrepにも --exclude vendor/vendors が付く" {
+	make_sast_repo
+	stub_sast_tools
+	cd "${SAST_REPO}"
+	run bash scripts/scan-sast.sh --scope full
+	[ "$status" -eq 0 ]
+	grep -q -- "--exclude vendor --exclude vendors" "${TEST_TMPDIR}/semgrep-calls.log"
 }
 
 @test "scan-sast.sh: baselineが無ければ、作成方法を示して停止する" {

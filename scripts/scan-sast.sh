@@ -117,7 +117,11 @@ PATCHED_LIST="$(mktemp)"
 trap 'rm -f "${SEMGREP_OUTPUT}" "${CPPCHECK_OUTPUT}" "${PATCHED_LIST}"' EXIT
 
 # --- 解析対象(パッチ対象ファイル)の決定 ---------------------------------------
-SEMGREP_TARGET_ARGS=("${SOURCE_DIR}")
+# サードパーティのvendor配下(go/PHPの依存だけでなく、ui/js/vendors, ui/assets/styles/vendors
+# のような同梱JS/CSSライブラリも含む)はSCAの対象でSASTの対象外。patchedスコープでは
+# PATCHED_LISTの段階で既に除外済みだが、変更ファイルが偶然vendor配下に無くても安全なように
+# 常に付与する(--scope fullではこれが唯一の除外手段)。
+SEMGREP_TARGET_ARGS=("${SOURCE_DIR}" --exclude "vendor" --exclude "vendors")
 CPPCHECK_TARGETS=("${SOURCE_DIR}")
 RUN_SEMGREP=1
 RUN_CPPCHECK=1
@@ -137,14 +141,14 @@ if [ "${SAST_SCOPE}" = "patched" ]; then
 		|| fail "未追跡ファイルの取得(git ls-files)に失敗しました。"
 	# grepは1行も残らないとき終了コード1を返すため、`|| true` はこの1段にだけ付ける。
 	printf '%s\n%s\n' "${CHANGED_TRACKED}" "${CHANGED_UNTRACKED}" \
-		| sed '/^$/d' | sort -u | { grep -Ev '(^|/)vendor/' || true; } > "${PATCHED_LIST}"
+		| sed '/^$/d' | sort -u | { grep -Ev '(^|/)vendors?/' || true; } > "${PATCHED_LIST}"
 
 	echo "=================================================================="
 	echo "SAST scope: patched(上流インポート ${IMPORT_REF:0:12} からの変更ファイル: $(wc -l < "${PATCHED_LIST}" | tr -d ' ')件)"
 	sed 's/^/  /' "${PATCHED_LIST}"
 	echo "=================================================================="
 
-	SEMGREP_TARGET_ARGS=("${SOURCE_DIR}")
+	SEMGREP_TARGET_ARGS=("${SOURCE_DIR}" --exclude "vendor" --exclude "vendors")
 	CPPCHECK_TARGETS=()
 	while IFS= read -r patched_file; do
 		# --include は全体スキャンと同じ .semgrepignore/git追跡の扱いを保つ(baselineとキーを一致させる)。
@@ -215,7 +219,7 @@ if [ "${RUN_CPPCHECK}" -eq 1 ]; then
 	if [ "${SAST_SCOPE}" = "full" ]; then
 		while IFS= read -r vendor_dir; do
 			CPPCHECK_ARGS+=(-i "${vendor_dir}")
-		done < <(find "${SOURCE_DIR}" -type d -name vendor -prune)
+		done < <(find "${SOURCE_DIR}" -type d \( -name vendor -o -name vendors \) -prune)
 	fi
 	# cppcheckの進捗(stdout)はCIログに残し、XML(stderr)だけをファイルへ取る。
 	cppcheck "${CPPCHECK_ARGS[@]}" "${CPPCHECK_TARGETS[@]}" 2> "${CPPCHECK_OUTPUT}" \
