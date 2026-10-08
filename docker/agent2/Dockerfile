@@ -45,6 +45,13 @@ RUN make -j"$(nproc)" CGO_CFLAGS="-I/build/include -D_LARGEFILE64_SOURCE" \
 
 FROM alpine:${ALPINE_VERSION}
 
+# ベースイメージ(alpine:${ALPINE_VERSION})は取得した時点のスナップショットで、その後にAlpineが
+# 公開した修正がまだ入っていないことがある(zlib 1.3.2-r0のCVE-2026-85091は、リポジトリに
+# 修正版1.3.2-r1があるのにベースイメージが古く、SCAゲートで落ちた)。ビルドのたびに公開済みの
+# 修正をすべて取り込む。再現性はビルド日付入りのタグ単位で担保する。
+# hadolint ignore=DL3017
+RUN apk upgrade --no-cache
+
 RUN apk add --no-cache ca-certificates tzdata openssl libcrypto3 zlib pcre
 
 RUN addgroup -g 1997 -S zabbix \
