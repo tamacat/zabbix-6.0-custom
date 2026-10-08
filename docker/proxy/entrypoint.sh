@@ -12,7 +12,11 @@ CONFIG_FILE="/etc/zabbix/zabbix_proxy.conf"
 DB_FILE="/var/lib/zabbix/db_data/zabbix_proxy.db"
 
 : "${ZBX_SERVER_HOST:=zabbix-server}"
-: "${ZBX_PROXY_HOSTNAME:=zabbix-proxy}"
+# プロキシ名は公式イメージと同じ ZBX_HOSTNAME で受け取る。以前のこのイメージは
+# ZBX_PROXY_HOSTNAME だけを読んでおり、公式の指定方法(ZBX_HOSTNAME)で渡した名前が黙って
+# 無視され、サーバー側で「proxy not found」になっていた。既存の利用者のため
+# ZBX_PROXY_HOSTNAME も別名として残す(両方指定なら公式のZBX_HOSTNAMEを優先)。
+: "${ZBX_HOSTNAME:=${ZBX_PROXY_HOSTNAME:-zabbix-proxy}}"
 
 echo "**** Generating ${CONFIG_FILE} from environment variables..."
 
@@ -25,7 +29,7 @@ PidFile=/run/zabbix/zabbix_proxy.pid
 SocketDir=/run/zabbix
 
 Server=${ZBX_SERVER_HOST}
-Hostname=${ZBX_PROXY_HOSTNAME}
+Hostname=${ZBX_HOSTNAME}
 
 DBName=${DB_FILE}
 
