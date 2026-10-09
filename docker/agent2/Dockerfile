@@ -67,7 +67,9 @@ RUN addgroup -g 1997 -S zabbix \
 
 COPY --from=builder /build/bin/zabbix_agent2 /usr/sbin/zabbix_agent2
 
-RUN mkdir -p /etc/zabbix /var/lib/zabbix/enc /run/zabbix \
+# enc_internal: ZBX_TLSPSK等のTLS素材を値そのもので渡されたときにentrypoint.shが書き出す先。
+# buffer: ZBX_ENABLEPERSISTENTBUFFER=true のときのPersistentBufferFile(agent2.db)の置き場所。
+RUN mkdir -p /etc/zabbix /var/lib/zabbix/enc /var/lib/zabbix/enc_internal /var/lib/zabbix/buffer /run/zabbix \
 	&& chown -R zabbix:zabbix /etc/zabbix /var/lib/zabbix /run/zabbix
 
 COPY docker/agent2/entrypoint.sh /usr/local/bin/entrypoint.sh
