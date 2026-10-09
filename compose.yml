@@ -114,6 +114,9 @@ services:
         ALPINE_VERSION: ${ALPINE_VERSION:-3.24}
     image: tamacat/zabbix-proxy-sqlite3:${ZABBIX_IMAGE_TAG:-6.0-custom}
     container_name: zabbix-proxy
+    # fping(ICMPチェック)は生ソケットが要る。DockerはNET_RAWを既定で許すがPodmanは許さないため、明示する。
+    cap_add:
+      - NET_RAW
     networks:
       - zbxnet
     depends_on:
@@ -122,7 +125,7 @@ services:
       - "${ZABBIX_PROXY_PORT:-10051}:10051"
     environment:
       ZBX_SERVER_HOST: zabbix-server
-      ZBX_PROXY_HOSTNAME: ${ZBX_PROXY_HOSTNAME:-zabbix-proxy}
+      ZBX_HOSTNAME: ${ZBX_PROXY_HOSTNAME:-zabbix-proxy}
     volumes:
       - zbx-proxy-db-data:/var/lib/zabbix/db_data
       - zbx-proxy-enc:/var/lib/zabbix/enc

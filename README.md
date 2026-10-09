@@ -143,6 +143,30 @@ docker pull tamacat/zabbix-server-mysql:6.0.48-alpine-b20260925
 Images are signed with cosign (keyless) and carry a CycloneDX SBOM attestation;
 publishing waits for approval on the `production` GitHub Environment.
 
+## Configuring zabbix-proxy
+
+The proxy image takes the same environment variables as the official
+`zabbix/zabbix-proxy-sqlite3` image (and as `zabbix-5.0-custom`'s proxy), and
+turns them into `zabbix_proxy.conf` at start. A variable that is unset or empty
+leaves the parameter at Zabbix's default.
+
+| Variable | Parameter / meaning |
+|---|---|
+| `ZBX_SERVER_HOST` | `Server`; default `zabbix-server`. Append a port as `host:port` (`ZBX_SERVER_PORT` also works, but only when set) |
+| `ZBX_HOSTNAME` | `Hostname`, **must match the proxy name registered on the server**; default `zabbix-proxy-sqlite3`. It also names the SQLite buffer, `db_data/<name>.sqlite` |
+| `ZBX_PROXYMODE` | `0` active (default), `1` passive |
+| `ZBX_TLSCONNECT`, `ZBX_TLSACCEPT`, `ZBX_TLSPSKIDENTITY`, `ZBX_TLS*FILE`, `ZBX_TLSPSK`, `ZBX_TLSCERT`, ... | TLS to the server. Give files by path (relative paths are looked up in the `enc` volume) or give the content itself |
+| `ZBX_CONFIGFREQUENCY`, `ZBX_HEARTBEATFREQUENCY`, `ZBX_DATASENDERFREQUENCY`, `ZBX_START*`, `ZBX_*CACHESIZE`, `ZBX_TIMEOUT`, `ZBX_DEBUGLEVEL`, ... | the matching `zabbix_proxy.conf` parameters |
+| `ZBX_LOADMODULE` | comma-separated modules from the `modules` directory |
+
+The legacy name `ZBX_PROXY_HOSTNAME` (what this project's `compose.yml` and
+`.env` use) still works as an alias for `ZBX_HOSTNAME`; the official name wins
+when both are set. Any other `ZBX_*` variable that the image does not act on
+(Java gateway, IPMI, ODBC, SNMP traps, SSH are not built in) is reported with a
+warning at start instead of being ignored silently, and `ZBX_*` is removed from
+the environment `zabbix_proxy` runs in (set `ZBX_CLEAR_ENV=false` to keep it).
+For ICMP checks the container needs `NET_RAW` (`compose.yml` adds it).
+
 ## First-time database setup (manual)
 
 Unlike the official `zabbix/zabbix-server-mysql` image, `docker/server/entrypoint.sh`

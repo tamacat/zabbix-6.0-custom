@@ -54,7 +54,8 @@ echo "=================================================================="
 cat <<'CHECKLIST'
 [ ] DB_SERVER_HOST / DB_SERVER_PORT / MYSQL_USER / MYSQL_PASSWORD / MYSQL_DATABASE
     (zabbix/zabbix-server-mysql, zabbix/zabbix-web-nginx-mysql と同名)
-[ ] ZBX_SERVER_HOST / ZBX_SERVER_NAME / ZBX_HOSTNAME / ZBX_PROXY_HOSTNAME
+[ ] ZBX_SERVER_HOST / ZBX_SERVER_NAME / ZBX_HOSTNAME(プロキシ名も公式と同じZBX_HOSTNAME。
+    ZBX_PROXY_HOSTNAME は従来名の別名。ZBX_PROXYMODE・ZBX_TLS*・ZBX_START* 等もtests/scripts/proxy-entrypoint.batsで検証)
     (zabbix/zabbix-web-nginx-mysql, zabbix/zabbix-agent2, zabbix/zabbix-proxy-sqlite3 と同名)
 [ ] /var/lib/zabbix/alertscripts, /var/lib/zabbix/externalscripts, /var/lib/zabbix/enc
     (zabbix-server / zabbix-proxy のボリュームマウントポイント)

@@ -64,9 +64,13 @@ RUN apk add --no-cache \
 		libxml2 \
 		libcurl \
 		net-snmp-libs \
+		fping \
 		tzdata \
 		ca-certificates \
 		su-exec
+# fping: プロキシ経由のICMPチェック(icmpping等)用。Zabbixは既定のFpingLocationである/usr/sbin/fpingを
+# 実行し、無いとアイテムがサポート外になる。Alpineのパッケージはcap_net_rawを持つので、コンテナにNET_RAWを
+# 許せばzabbixユーザーでも動く(compose.ymlが付ける。Dockerは既定で持つがPodmanは持たない)。
 
 RUN addgroup -g 1997 -S zabbix \
 	&& adduser -D -S -H -u 1997 -G zabbix -s /sbin/nologin zabbix
@@ -76,7 +80,10 @@ COPY --from=builder /build/conf/zabbix_proxy.conf /etc/zabbix/zabbix_proxy.conf.
 
 # db_dataはSQLiteバッファファイル専用の永続領域(BR5.1の例外規定はここに限定される。
 # 主データベースはあくまでMySQLであり、このボリュームはproxy自身のローカルバッファのみを保持する)。
-RUN mkdir -p /etc/zabbix /var/lib/zabbix/db_data /var/lib/zabbix/enc /var/lib/zabbix/externalscripts /run/zabbix \
+# enc_internal: ZBX_TLSPSK・ZBX_TLSCERT等のTLS素材を、ファイルではなく値そのもので渡されたときに
+# entrypoint.shが書き出す先。modules: ZBX_LOADMODULEのLoadModulePath。
+RUN mkdir -p /etc/zabbix /var/lib/zabbix/db_data /var/lib/zabbix/enc /var/lib/zabbix/enc_internal \
+		/var/lib/zabbix/externalscripts /var/lib/zabbix/modules /run/zabbix \
 	&& chown -R zabbix:zabbix /etc/zabbix /var/lib/zabbix /run/zabbix
 
 COPY docker/proxy/entrypoint.sh /usr/local/bin/entrypoint.sh
