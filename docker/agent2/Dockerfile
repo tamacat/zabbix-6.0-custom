@@ -18,6 +18,14 @@ ARG ZABBIX_SRC_DIR=sources/zabbix-6.0.48
 
 RUN apk add --no-cache go build-base git autoconf automake libtool pcre-dev openssl-dev zlib-dev
 
+# agent2のバイナリにはGo標準ライブラリがそのまま組み込まれる。Alpineの`go`パッケージは
+# 公式のパッチリリースより遅れて届き(go1.26.8のまま、1.26.9に修正されたnet/http・
+# crypto/tls・mime/multipartの脆弱性9件を含んでいた)、Trivyもこれらをまだ知らず見逃した。
+# 修正版のツールチェーンを`go`が自動取得して(チェックサムDBで検証される)ビルドに使う。
+# 固定なので、Goの新しいパッチリリースが出たらここを上げる。agent2のSCAゲート(scan-go-vuln.sh、
+# govulncheck)が、古いままだと失敗して知らせる。Alpineの`go`が追いついたら、この指定は外してよい。
+ENV GOTOOLCHAIN=go1.26.9
+
 WORKDIR /build
 COPY ${ZABBIX_SRC_DIR}/ /build/
 

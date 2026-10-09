@@ -61,6 +61,15 @@ Two independent tool families are used, each for a different kind of check:
 
 - **SCA / image scanning** (Trivy): known-vulnerability lookups against
   dependencies and the base image.
+- **Go vulnerability check** (govulncheck, `zabbix-agent2` only): Trivy matches
+  Go modules and the Go standard library against its own database, which can lag
+  Go's patch releases (go1.26.8's nine `net/http`/`crypto/tls` advisories showed
+  up as 0 findings). govulncheck uses Go's official database and reports only
+  vulnerabilities in code the binary actually calls. It runs on the compiled
+  `zabbix_agent2` taken from the image (`scripts/scan-go-vuln.sh`) and is part of
+  the SCA gate, with the same registry/waiver handling. Go's database carries no
+  CVSS score, so a called vulnerability is gated as Medium; its CVE alias (or
+  GHSA, or the `GO-YYYY-NNNN` id) is the registry key.
 - **SAST** (Semgrep for PHP/JS, cppcheck for C): semantic static analysis of
   the patched source itself.
 

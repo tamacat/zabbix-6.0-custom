@@ -90,6 +90,19 @@ jobs:
       - name: Install Trivy
         run: curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin
 
+      # govulncheck(Go公式)はTrivyが見逃すGo標準ライブラリの脆弱性を、バイナリが実際に呼ぶ
+      # コードに限って判定する。ツール本体はバージョン固定(v1.8.0はGo 1.26以上が必要)、脆弱性DBは
+      # 実行時に最新を取得する。
+      - uses: actions/setup-go@v7
+        with:
+          go-version: "1.26"
+          cache: false
+
+      - name: Install govulncheck
+        run: |
+          go install golang.org/x/vuln/cmd/govulncheck@v1.8.0
+          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+
       - name: Install gitleaks
         # .pre-commit-config.yaml と同じバージョン(v8.21.2)に揃え、pre-commit側と
         # CI側で検出能力が食い違わないようにする[NFR3.1: 二重チェック]。

@@ -48,7 +48,9 @@ SECRET_SCAN_RESULTS = ("Clean", "Blocked")
 COMPAT_RESULTS = ("Pass", "Fail")
 ARCHITECTURES = ("amd64",)  # BR5.2: 初回リリースはamd64のみ
 
-CVE_ID_PATTERN = re.compile(r"^(CVE-\d{4}-\d{4,}|GHSA-[a-z0-9]{4}-[a-z0-9]{4}-[a-z0-9]{4})$")
+# CVE/GHSAに加え、Goの脆弱性DB(vuln.go.dev)のID(GO-YYYY-NNNN)も受け付ける。govulncheckの指摘は
+# CVEの別名を持たないものがあり、それでもwaiverできるようにするため(別名があればCVEを優先する)。
+CVE_ID_PATTERN = re.compile(r"^(CVE-\d{4}-\d{4,}|GHSA-[a-z0-9]{4}-[a-z0-9]{4}-[a-z0-9]{4}|GO-\d{4}-\d{4,})$")
 WAIVER_ID_PATTERN = re.compile(r"^[a-z0-9]+(-[a-z0-9]+)*$")  # kebab-case
 
 
@@ -62,7 +64,7 @@ def _require(condition: bool, message: str) -> None:
 
 @dataclass
 class Vulnerability:
-    """対象コンポーネントに存在する既知の脆弱性(CVE/GHSA)の棚卸し記録。"""
+    """対象コンポーネントに存在する既知の脆弱性(CVE/GHSA/GO-ID)の棚卸し記録。"""
 
     cve_id: str
     component_name: str
@@ -74,7 +76,7 @@ class Vulnerability:
     def __post_init__(self) -> None:
         _require(
             bool(CVE_ID_PATTERN.match(self.cve_id)),
-            f"cve_id はCVE-YYYY-NNNN(N...)またはGHSA-xxxx-xxxx-xxxx形式でなければなりません: {self.cve_id!r}",
+            f"cve_id はCVE-YYYY-NNNN(N...)・GHSA-xxxx-xxxx-xxxx・GO-YYYY-NNNNのいずれかの形式でなければなりません: {self.cve_id!r}",
         )
         _require(
             self.component_name in COMPONENT_NAMES,
@@ -232,7 +234,7 @@ class Finding:
         if self.cve_id is not None:
             _require(
                 bool(CVE_ID_PATTERN.match(self.cve_id)),
-                f"cve_id はCVE-YYYY-NNNN(N...)またはGHSA-xxxx-xxxx-xxxx形式でなければなりません: {self.cve_id!r}",
+                f"cve_id はCVE-YYYY-NNNN(N...)・GHSA-xxxx-xxxx-xxxx・GO-YYYY-NNNNのいずれかの形式でなければなりません: {self.cve_id!r}",
             )
 
 

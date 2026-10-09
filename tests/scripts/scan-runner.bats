@@ -351,3 +351,124 @@ CPPCHECK_FINDING_XML='<results version="2"><errors><error id="nullPointer" sever
 	[[ "$output" == *"git diff"* ]]
 	[[ "$output" != *"SAST verdict: Pass"* ]]
 }
+
+# --- scan-go-vuln.sh(govulncheckによるGoバイナリの脆弱性ゲート) -----------------------
+
+stub_docker_save_with_binary() {
+	# `docker save <image> -o <path>` の出力を模す。STUB_NO_BINARY=1 ならバイナリを含めない。
+	cat > "${STUB_BIN}/docker" <<'EOF'
+#!/usr/bin/env bash
+out=""
+prev=""
+for arg in "$@"; do
+	if [ "${prev}" = "-o" ]; then
+		out="${arg}"
+	fi
+	prev="${arg}"
+done
+work="$(mktemp -d)"
+mkdir -p "${work}/blobs/sha256" "${work}/layer/etc"
+echo x > "${work}/layer/etc/os-release"
+if [ -z "${STUB_NO_BINARY:-}" ]; then
+	mkdir -p "${work}/layer/usr/sbin"
+	echo fake-binary > "${work}/layer/usr/sbin/zabbix_agent2"
+fi
+tar -cf "${work}/blobs/sha256/abc123" -C "${work}/layer" .
+rm -rf "${work}/layer"
+echo '[{"Config":"cfg","Layers":["blobs/sha256/abc123"]}]' > "${work}/manifest.json"
+tar -cf "${out}" -C "${work}" .
+rm -rf "${work}"
+EOF
+	chmod +x "${STUB_BIN}/docker"
+}
+
+stub_govulncheck() {
+	# $1: 出力するJSON、$2: 終了コード(省略時0)。呼び出しの引数を記録する。
+	local json="$1" code="${2:-0}"
+	cat > "${STUB_BIN}/govulncheck" <<EOF
+#!/usr/bin/env bash
+echo "\$*" >> "${TEST_TMPDIR}/govulncheck-calls.log"
+cat <<'JSON'
+${json}
+JSON
+exit ${code}
+EOF
+	chmod +x "${STUB_BIN}/govulncheck"
+}
+
+GOVULN_CLEAN_JSON='{"config": {"scanner_name": "govulncheck", "scan_mode": "binary"}}'
+GOVULN_CALLED_JSON='{"config": {"scanner_name": "govulncheck"}}
+{"osv": {"id": "GO-2026-6603", "aliases": ["CVE-2026-78659"]}}
+{"finding": {"osv": "GO-2026-6603", "fixed_version": "go1.26.9", "trace": [{"module": "stdlib", "package": "net/http", "function": "Do"}]}}'
+
+@test "scan-go-vuln.sh: govulncheckが見つからない場合エラーで停止する" {
+	cd "${REPO_ROOT}"
+	stub_docker_save_with_binary
+	hide_tool govulncheck
+	run bash scripts/scan-go-vuln.sh tamacat/zabbix-agent2:6.0.48-alpine-b20261008
+	[ "$status" -ne 0 ]
+	[[ "$output" == *"govulncheck が見つかりません"* ]]
+}
+
+@test "scan-go-vuln.sh: 呼ばれる脆弱性が無ければPassし、イメージから取り出したバイナリを解析する" {
+	cd "${REPO_ROOT}"
+	stub_docker_save_with_binary
+	stub_govulncheck "${GOVULN_CLEAN_JSON}"
+	run bash scripts/scan-go-vuln.sh tamacat/zabbix-agent2:6.0.48-alpine-b20261008
+	[ "$status" -eq 0 ]
+	[[ "$output" == *"Go vulnerability verdict: Pass"* ]]
+	grep -q -- "-mode=binary -format json" "${TEST_TMPDIR}/govulncheck-calls.log"
+}
+
+@test "scan-go-vuln.sh: 呼ばれる脆弱性があればFailし、台帳にwaiverが無い限り通さない" {
+	cd "${REPO_ROOT}"
+	stub_docker_save_with_binary
+	stub_govulncheck "${GOVULN_CALLED_JSON}"
+	run bash scripts/scan-go-vuln.sh tamacat/zabbix-agent2:6.0.48-alpine-b20261008
+	[ "$status" -ne 0 ]
+	[[ "$output" == *"Go vulnerability verdict: Fail"* ]]
+	[[ "$output" == *"govulncheck|GO-2026-6603"* ]]
+}
+
+@test "scan-go-vuln.sh: 有効なwaiverが台帳にあれば、同じ指摘でもPassする" {
+	cd "${REPO_ROOT}"
+	stub_docker_save_with_binary
+	stub_govulncheck "${GOVULN_CALLED_JSON}"
+	local today expires
+	today="$(date -u +%Y-%m-%d)"
+	expires="$(date -u -d '+30 days' +%Y-%m-%d 2>/dev/null || date -u -v+30d +%Y-%m-%d)"
+	python3 -m release_tools.cli register-cve --cve-id CVE-2026-78659 --component zabbix-agent2 --severity Medium --registry "${REGISTRY_PATH}" >/dev/null 2>&1 		|| python -m release_tools.cli register-cve --cve-id CVE-2026-78659 --component zabbix-agent2 --severity Medium --registry "${REGISTRY_PATH}" >/dev/null
+	python3 -m release_tools.cli waive --cve-id CVE-2026-78659 --waiver-id waiver-cve-2026-78659 --reason "修正版のGoが未提供" --issued-at "${today}" --expires-at "${expires}" --registry "${REGISTRY_PATH}" >/dev/null 2>&1 		|| python -m release_tools.cli waive --cve-id CVE-2026-78659 --waiver-id waiver-cve-2026-78659 --reason "修正版のGoが未提供" --issued-at "${today}" --expires-at "${expires}" --registry "${REGISTRY_PATH}" >/dev/null
+	run bash scripts/scan-go-vuln.sh tamacat/zabbix-agent2:6.0.48-alpine-b20261008
+	[ "$status" -eq 0 ]
+	[[ "$output" == *"Go vulnerability verdict: Pass"* ]]
+}
+
+@test "scan-go-vuln.sh: govulncheck自体が失敗(DB取得失敗等)した場合は、Passにせず停止する" {
+	cd "${REPO_ROOT}"
+	stub_docker_save_with_binary
+	stub_govulncheck "" 2
+	run bash scripts/scan-go-vuln.sh tamacat/zabbix-agent2:6.0.48-alpine-b20261008
+	[ "$status" -ne 0 ]
+	[[ "$output" == *"govulncheck の実行に失敗しました"* ]]
+	[[ "$output" != *"verdict: Pass"* ]]
+}
+
+@test "scan-go-vuln.sh: govulncheckが空の出力を返しても、脆弱性なしとは見なさない" {
+	cd "${REPO_ROOT}"
+	stub_docker_save_with_binary
+	stub_govulncheck ""
+	run bash scripts/scan-go-vuln.sh tamacat/zabbix-agent2:6.0.48-alpine-b20261008
+	[ "$status" -ne 0 ]
+	[[ "$output" != *"verdict: Pass"* ]]
+}
+
+@test "scan-go-vuln.sh: イメージにバイナリが無い場合は、解析せずに停止する" {
+	cd "${REPO_ROOT}"
+	stub_docker_save_with_binary
+	stub_govulncheck "${GOVULN_CLEAN_JSON}"
+	run env STUB_NO_BINARY=1 bash scripts/scan-go-vuln.sh tamacat/zabbix-agent2:6.0.48-alpine-b20261008
+	[ "$status" -ne 0 ]
+	[[ "$output" == *"取り出せませんでした"* ]]
+	[ ! -f "${TEST_TMPDIR}/govulncheck-calls.log" ]
+}

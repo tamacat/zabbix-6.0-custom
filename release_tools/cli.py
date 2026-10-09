@@ -20,6 +20,7 @@ from pathlib import Path
 from typing import Optional
 
 from . import gate as gate_mod
+from .imagefile import ImageFileError, extract_image_file
 from .models import COMPONENT_NAMES
 from .registry import VulnerabilityRegistry, VulnerabilityRegistryError
 from .tagging import generate_tag, require_self_review_confirmation
@@ -118,6 +119,8 @@ def _normalize_findings(tool: str, raw: str, source_root: Optional[str]) -> list
         return gate_mod.normalize_semgrep_findings(json.loads(raw), source_root=source_root)
     if tool == "cppcheck":
         return gate_mod.normalize_cppcheck_findings(raw, source_root=source_root)
+    if tool == "govulncheck":
+        return gate_mod.normalize_govulncheck_findings(raw)
     raise ValueError(f"未対応のtoolです: {tool}")  # argparseのchoicesで到達しないが、fail fastのため明示する
 
 
@@ -132,7 +135,7 @@ def cmd_scan_gate(args: argparse.Namespace) -> int:
         return 1
 
     if args.baseline:
-        if args.tool == "trivy":
+        if args.tool in ("trivy", "govulncheck"):
             print("scan-gate失敗: --baseline はSAST(semgrep/cppcheck)専用です", file=sys.stderr)
             return 1
         try:
@@ -173,6 +176,16 @@ def cmd_sast_baseline(args: argparse.Namespace) -> int:
     entries = gate_mod.build_baseline(findings)
     gate_mod.save_baseline(args.output, args.tool, entries, note=args.note)
     print(f"{args.output}: {len(entries)}キー / {sum(entries.values())}件を記録しました")
+    return 0
+
+
+def cmd_extract_image_file(args: argparse.Namespace) -> int:
+    try:
+        size = extract_image_file(Path(args.tar), args.path, Path(args.output))
+    except (ImageFileError, OSError, ValueError) as exc:
+        print(f"extract-image-file失敗: {exc}", file=sys.stderr)
+        return 1
+    print(f"{args.path}: {size}バイトを {args.output} へ取り出しました")
     return 0
 
 
@@ -240,7 +253,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.set_defaults(func=cmd_generate_tag)
 
     p = sub.add_parser("scan-gate", help="スキャン結果を正規化しBR2.1のゲート判定を行う")
-    p.add_argument("--tool", required=True, choices=("trivy", "semgrep", "cppcheck"))
+    p.add_argument("--tool", required=True, choices=("trivy", "semgrep", "cppcheck", "govulncheck"))
     p.add_argument("--input", required=True, help="ツール出力ファイルのパス")
     p.add_argument("--baseline", default=None, help="SAST用: 既知の指摘のbaseline(JSON)。超過分のみゲート対象にする")
     p.add_argument("--source-root", default=None, help="SAST用: baselineキーのパスを相対化する基準ディレクトリ")
@@ -260,6 +273,12 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--output", required=True, help="書き出し先のbaseline(JSON)")
     p.add_argument("--note", default="", help="baselineの出典・トリアージ内容のメモ")
     p.set_defaults(func=cmd_sast_baseline)
+
+    p = sub.add_parser("extract-image-file", help="`docker save` のtarから、イメージ内の1ファイルを取り出す(コンテナは起動しない)")
+    p.add_argument("--tar", required=True, help="docker save の出力ファイル")
+    p.add_argument("--path", required=True, help="イメージ内のパス(例: usr/sbin/zabbix_agent2)")
+    p.add_argument("--output", required=True, help="取り出し先のファイル")
+    p.set_defaults(func=cmd_extract_image_file)
 
     p = sub.add_parser("publish-gate", help="BR3.1の4条件を判定する")
     p.add_argument("--sca", required=True, choices=("Pass", "Fail"))

@@ -103,12 +103,13 @@ Once the Zabbix source is present:
 ```bash
 ./scripts/build-images.sh      # build + tag all 4 components
 ./scripts/scan-sca.sh   <tag>  # Trivy SCA scan + gate
+./scripts/scan-go-vuln.sh <agent2-tag>   # govulncheck on the agent2 binary + gate (needs Go 1.26+)
 ./scripts/scan-sast.sh         # Semgrep + cppcheck SAST: files changed since the upstream
                                 # import, new findings only (--scope full for the whole tree;
                                 # see docs/CONTRIBUTING.md "Security scanning")
 ./scripts/scan-secrets.sh <tag> [<tag> ...]   # gitleaks, git diff + image layers
 ./scripts/compat-test.sh       # docker compose up + compatibility checklist
-./scripts/ci-pipeline.sh       # runs the five commands above in order (build
+./scripts/ci-pipeline.sh       # runs the checks above in order (build
                                 # through the BR3.1 publish-gate check), stopping
                                 # at the first failing gate
 ./scripts/push-images.sh --tag <tag> --sca Pass --sast Pass \

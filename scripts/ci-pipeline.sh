@@ -89,6 +89,11 @@ echo "=================================================================="
 SCA_STATUS=0
 for tag in "${TAGS[@]}"; do
 	./scripts/scan-sca.sh "${tag}" || SCA_STATUS=$?
+	# Goで書かれているのはagent2だけ。Trivyが見逃すGo標準ライブラリの脆弱性を、Go公式の
+	# govulncheckで補う(同じSCAゲートの一部として、waiverも同じ台帳で扱う)。
+	case "${tag}" in
+		*/zabbix-agent2:*) ./scripts/scan-go-vuln.sh "${tag}" || SCA_STATUS=$? ;;
+	esac
 done
 [ "${SCA_STATUS}" -eq 0 ] || fail "SCAスキャンでFail判定が出ました(上記ログ参照)"
 

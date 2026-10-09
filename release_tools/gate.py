@@ -130,6 +130,69 @@ def normalize_cppcheck_findings(xml_text: str, source_root: Optional[str] = None
     return findings
 
 
+def _iter_json_values(text: str):
+    """JSON値が空白区切りで連結された文字列(govulncheck -format json の出力)を1つずつ返す。"""
+    decoder = json.JSONDecoder()
+    index = 0
+    while True:
+        while index < len(text) and text[index].isspace():
+            index += 1
+        if index >= len(text):
+            return
+        value, index = decoder.raw_decode(text, index)
+        yield value
+
+
+def normalize_govulncheck_findings(text: str) -> List[Finding]:
+    """`govulncheck -mode=binary -format json` の出力(Goバイナリの脆弱性)をFinding一覧へ正規化する。
+
+    govulncheckはTrivyと違い、Go標準ライブラリと依存モジュールのうち「バイナリが実際に呼び出す
+    コード」(関数レベルの発見)を、Go公式の脆弱性DBで判定する。パッケージ・モジュールが含まれる
+    だけで呼び出しの無いものは、govulncheck自身の終了コード(3)と同様にゲートの対象外とする。
+
+    Go脆弱性DBは重大度(CVSS)を持たないため、呼び出される脆弱性は保守的にMediumとして扱い
+    (BR2.1のゲート対象)、CVEの別名があればそれを、なければGHSA、最後にGO-IDを `cve_id` にして
+    waiver・台帳と突き合わせられるようにする(Trivyが同じ脆弱性を別経路で検出しても同じ台帳の項目に
+    なる)。
+    """
+    aliases_by_osv: Dict[str, List[str]] = {}
+    reachable: Dict[str, None] = {}  # 挿入順を保つ(出力を安定させる)
+    saw_config = False
+    for message in _iter_json_values(text):
+        if "config" in message:
+            saw_config = True
+        osv = message.get("osv")
+        if isinstance(osv, dict) and osv.get("id"):
+            aliases_by_osv[osv["id"]] = list(osv.get("aliases") or [])
+        finding = message.get("finding")
+        if isinstance(finding, dict) and finding.get("osv"):
+            trace = finding.get("trace") or []
+            if trace and trace[0].get("function"):
+                reachable.setdefault(finding["osv"], None)
+    if not saw_config:
+        raise ValueError("govulncheckのJSON出力ではありません(configメッセージがありません)")
+
+    findings: List[Finding] = []
+    for idx, osv_id in enumerate(reachable):
+        aliases = aliases_by_osv.get(osv_id, [])
+        cve_id = next(
+            (a for a in aliases if a.startswith("CVE-") and _looks_like_known_id(a)),
+            None,
+        ) or next((a for a in aliases if a.startswith("GHSA-") and _looks_like_known_id(a)), None)
+        if cve_id is None and _looks_like_known_id(osv_id):
+            cve_id = osv_id
+        findings.append(
+            Finding(
+                finding_id=f"govulncheck:{osv_id}:{idx}",
+                scan_run_id="",
+                severity="Medium",
+                cve_id=cve_id,
+                baseline_key=f"govulncheck|{osv_id}",
+            )
+        )
+    return findings
+
+
 # --- SAST baseline(既知の指摘の台帳)------------------------------------------
 #
 # 上流ソースには本プロジェクトが修正しない既存の指摘が大量にある。全件を毎回Failに

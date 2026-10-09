@@ -53,8 +53,9 @@ case "$1" in
 		done
 		# scan-secrets.sh はmanifest.jsonのLayersからレイヤーを展開するため、最小限の実物を作る。
 		work="$(mktemp -d)"
-		mkdir -p "${work}/blobs/sha256" "${work}/layer/app"
+		mkdir -p "${work}/blobs/sha256" "${work}/layer/app" "${work}/layer/usr/sbin"
 		echo hello > "${work}/layer/app/config.txt"
+		echo fake-binary > "${work}/layer/usr/sbin/zabbix_agent2"
 		tar -cf "${work}/blobs/sha256/abc123" -C "${work}/layer" .
 		rm -rf "${work}/layer"
 		echo '[{"Config":"cfg","Layers":["blobs/sha256/abc123"]}]' > "${work}/manifest.json"
@@ -115,6 +116,18 @@ EOF
 exit 0
 EOF
 	chmod +x "${STUB_BIN}/cppcheck"
+
+	cat > "${STUB_BIN}/govulncheck" <<EOF
+#!/usr/bin/env bash
+echo "\$*" >> "${TEST_TMPDIR}/govulncheck-calls.log"
+if [ -n "\${GOVULN_STUB_JSON:-}" ]; then
+	printf '%s
+' "\${GOVULN_STUB_JSON}"
+else
+	echo '{"config": {"scanner_name": "govulncheck", "scan_mode": "binary"}}'
+fi
+EOF
+	chmod +x "${STUB_BIN}/govulncheck"
 
 	cat > "${STUB_BIN}/gitleaks" <<'EOF'
 #!/usr/bin/env bash
@@ -252,4 +265,27 @@ EOF
 	[[ "$output" == *"SCAスキャンでFail判定が出ました"* ]]
 	[[ "$output" != *"ScanRunner(SAST)"* ]]
 	[[ "$output" != *"CompatibilityTestRun"* ]]
+}
+
+@test "Go(agent2)のバイナリだけをgovulncheckで解析し、4コンポーネントのうち1回だけ呼ぶ" {
+	cd "${REPO_ROOT}"
+	run run_pipeline
+	[ "$status" -eq 0 ]
+	[[ "$output" == *"Go vulnerability verdict: Pass"* ]]
+	[ "$(wc -l < "${TEST_TMPDIR}/govulncheck-calls.log")" -eq 1 ]
+	grep -q -- "-mode=binary" "${TEST_TMPDIR}/govulncheck-calls.log"
+}
+
+@test "govulncheckがバイナリの呼ぶ脆弱性を見つけたらSCAでFailし、SAST以降は実行しない" {
+	cd "${REPO_ROOT}"
+	local found='{"config": {"scanner_name": "govulncheck"}}
+{"osv": {"id": "GO-2026-6603", "aliases": ["CVE-2026-78659"]}}
+{"finding": {"osv": "GO-2026-6603", "fixed_version": "go1.26.9", "trace": [{"module": "stdlib", "package": "net/http", "function": "Do"}]}}'
+	export GOVULN_STUB_JSON="${found}" # run_pipelineのenvが子プロセスへ引き継ぐ
+	run run_pipeline
+	[ "$status" -ne 0 ]
+	[[ "$output" == *"Go vulnerability verdict: Fail"* ]]
+	[[ "$output" == *"govulncheck|GO-2026-6603"* ]]
+	[[ "$output" == *"SCAスキャンでFail判定が出ました"* ]]
+	[[ "$output" != *"ScanRunner(SAST)"* ]]
 }
