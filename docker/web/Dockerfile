@@ -69,13 +69,15 @@ RUN sed -i 's#^;error_log = .*#error_log = /proc/self/fd/2#' /etc/${PHP_PKG}/php
 # 環境変数からコンテナ起動時に生成するため、イメージには焼き込まない。
 COPY --chown=zabbix:zabbix ${ZABBIX_SRC_DIR}/ui/ /usr/share/zabbix/
 
-RUN mkdir -p /usr/share/zabbix/conf /tmp/nginx-client-body /tmp/nginx-proxy /tmp/nginx-fastcgi \
+RUN mkdir -p /usr/share/zabbix/conf /tmp/zabbix-nginx /tmp/nginx-client-body /tmp/nginx-proxy /tmp/nginx-fastcgi \
 		/tmp/nginx-uwsgi /tmp/nginx-scgi \
-	&& chown -R zabbix:zabbix /usr/share/zabbix /tmp/nginx-client-body /tmp/nginx-proxy \
+	&& chown -R zabbix:zabbix /usr/share/zabbix /tmp/zabbix-nginx /tmp/nginx-client-body /tmp/nginx-proxy \
 		/tmp/nginx-fastcgi /tmp/nginx-uwsgi /tmp/nginx-scgi \
-	# entrypoint.shがPHP_TZ適用のため99-zabbix.iniを書き換えられるよう、非rootのzabbix
-	# ユーザーに書き込み権限を付与する(root常駐を避けるため、rootのままにはしない)。
-	&& chown zabbix:zabbix /etc/${PHP_PKG}/conf.d/99-zabbix.ini
+	# entrypoint.shが環境変数(PHP_TZ、ZBX_MEMORYLIMIT、PHP_FPM_PM*など)から99-zabbix.iniと
+	# php-fpm.d/zz-zabbix.confを書き直せるよう、この2ファイルだけ非rootのzabbixユーザーに
+	# 書き込み権限を付与する(ディレクトリはrootのまま。root常駐を避けるため)。
+	&& touch /etc/${PHP_PKG}/php-fpm.d/zz-zabbix.conf \
+	&& chown zabbix:zabbix /etc/${PHP_PKG}/conf.d/99-zabbix.ini /etc/${PHP_PKG}/php-fpm.d/zz-zabbix.conf
 
 COPY docker/web/entrypoint.sh /usr/local/bin/entrypoint.sh
 RUN chmod +x /usr/local/bin/entrypoint.sh
@@ -83,7 +85,7 @@ RUN chmod +x /usr/local/bin/entrypoint.sh
 VOLUME ["/usr/share/zabbix/conf"]
 
 USER zabbix
-EXPOSE 8080
+EXPOSE 8080 8443
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
 	CMD wget -q -O /dev/null http://127.0.0.1:8080/ || exit 1

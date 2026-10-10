@@ -167,6 +167,32 @@ warning at start instead of being ignored silently, and `ZBX_*` is removed from
 the environment `zabbix_proxy` runs in (set `ZBX_CLEAR_ENV=false` to keep it).
 For ICMP checks the container needs `NET_RAW` (`compose.yml` adds it).
 
+## Official environment variables (server, agent2, web)
+
+Like the proxy, the other images take the variables of the official
+`zabbix/zabbix-*` 6.0 images; an unsupported `ZBX_*` variable is warned about
+at start instead of being ignored silently.
+
+- **zabbix-server**: `DB_SERVER_HOST/PORT`, `MYSQL_USER/PASSWORD/DATABASE` (and `*_FILE`
+  for the secrets), DB TLS (`ZBX_DBTLSCONNECT`, `ZBX_DBTLS*FILE`), server TLS, every
+  `ZBX_<Parameter>` of `zabbix_server.conf` that is built in, `ZBX_LOADMODULE`, and HA
+  (`ZBX_HANODENAME`, `ZBX_AUTOHANODENAME`, `ZBX_NODEADDRESS`, `ZBX_AUTONODEADDRESS`). The config
+  file is `0600` because it holds the DB password; the server starts as root only to
+  fix ownership, then runs as `zabbix`. `fping` is included (give the container `NET_RAW`).
+- **zabbix-agent2**: `ZBX_HOSTNAME`, `ZBX_SERVER_HOST/PORT`, `ZBX_PASSIVESERVERS`,
+  `ZBX_ACTIVESERVERS`, `ZBX_PASSIVE_ALLOW`, `ZBX_ACTIVE_ALLOW`, `ZBX_ENABLEPERSISTENTBUFFER`,
+  `ZBX_ENABLESTATUSPORT`, `ZBX_ALLOWKEY/DENYKEY`, TLS (path or content), and the other agent2
+  parameters as `ZBX_<Parameter>`.
+- **zabbix-web**: `DB_SERVER_HOST/PORT`, `MYSQL_*` (and `*_FILE`), `ZBX_SERVER_HOST/PORT/NAME`,
+  `PHP_TZ`, PHP limits (`ZBX_MAXEXECUTIONTIME`, `ZBX_MEMORYLIMIT`, `ZBX_POSTMAXSIZE`,
+  `ZBX_UPLOADMAXFILESIZE`, `ZBX_MAXINPUTTIME`, `ZBX_SESSION_NAME`), `PHP_FPM_PM*`, DB TLS
+  (`ZBX_DB_ENCRYPTION`, `ZBX_DB_*_FILE`, `ZBX_DB_VERIFY_HOST`, `ZBX_DB_CIPHER_LIST`),
+  `DB_DOUBLE_IEEE754`, Vault (`ZBX_VAULTURL`, `ZBX_VAULTDBPATH`, `VAULT_TOKEN`), history storage,
+  SSO files, `ENABLE_WEB_ACCESS_LOG`, `EXPOSE_WEB_SERVER_INFO`, `HTTP_INDEX_FILE`,
+  `WEB_REAL_IP_FROM/HEADER`, and `ZBX_DENY_GUI_ACCESS` / `ZBX_GUI_ACCESS_IP_RANGE` /
+  `ZBX_GUI_WARNING_MSG`. HTTPS: mount `ssl.crt` and `ssl.key` (optionally `dhparam.pem`)
+  at `/etc/ssl/nginx` and the image also listens on 8443.
+
 ## First-time database setup (manual)
 
 Unlike the official `zabbix/zabbix-server-mysql` image, `docker/server/entrypoint.sh`

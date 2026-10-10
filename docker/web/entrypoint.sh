@@ -1,26 +1,20 @@
 #!/bin/sh
-# zabbix-web(nginx + PHP-FPM) エントリポイント [FR3.2]。公式イメージとの環境変数互換性を維持する。
+# zabbix-web(nginx + PHP-FPM) エントリポイント [FR3.2]。公式 zabbix/zabbix-web-nginx-mysql 6.0 と
+# 同じ環境変数から、zabbix.conf.php・PHPの設定・nginxの設定を生成する。
 #
-# 公式 zabbix/zabbix-web-nginx-mysql イメージと同じ環境変数名(DB_SERVER_HOST,
-# MYSQL_USER, MYSQL_PASSWORD, MYSQL_DATABASE, ZBX_SERVER_HOST, ZBX_SERVER_NAME,
-# PHP_TZ)から /usr/share/zabbix/conf/zabbix.conf.php を生成する。
+# 非rootのzabbixユーザーで動くため、書き込む先はDockerfileでzabbixへchownした場所だけ:
+#   zabbix.conf.php / 99-zabbix.ini / php-fpm.d/zz-zabbix.conf / /tmp/zabbix-nginx/*.conf
 # PHP-FPMをバックグラウンドで起動し、nginxをフォアグラウンドでexecする
-# (このコンテナ内では2プロセスの単純な起動順序管理のみを行い、専用の
-# プロセスマネージャ(supervisord等)は導入しない)。
+# (専用のプロセスマネージャは導入しない)。
 
 set -eu
 
 CONFIG_FILE="/usr/share/zabbix/conf/zabbix.conf.php"
+PHP_INI_FILE="/etc/php83/conf.d/99-zabbix.ini"
+FPM_POOL_FILE="/etc/php83/php-fpm.d/zz-zabbix.conf"
+NGINX_SNIPPET_DIR="/tmp/zabbix-nginx"
+SSL_DIR="/etc/ssl/nginx"
 PHP_FPM_BIN="${PHP_FPM_BIN:-php-fpm83}"
-
-: "${DB_SERVER_HOST:=mysql-server}"
-: "${DB_SERVER_PORT:=3306}"
-: "${MYSQL_USER:=zabbix}"
-: "${MYSQL_DATABASE:=zabbix}"
-: "${ZBX_SERVER_HOST:=zabbix-server}"
-: "${ZBX_SERVER_PORT:=10051}"
-: "${ZBX_SERVER_NAME:=}"
-: "${PHP_TZ:=UTC}"
 
 fail() {
 	echo "**** ERROR: $1" >&2
@@ -28,63 +22,220 @@ fail() {
 	exit 1
 }
 
-if [ -z "${MYSQL_PASSWORD:-}" ]; then
-	fail "MYSQL_PASSWORD is not set. This variable is mandatory for Zabbix web to connect to the database."
+warn() { echo "**** WARNING: $1" >&2; }
+
+# 値が1行であること(改行で設定ファイルへ別の設定を差し込めないように)。
+single_line() {
+	case "$2" in
+		*"
+"*) fail "$1 contains a line break, which is not allowed." ;;
+	esac
+}
+
+lower() { printf '%s' "$1" | tr 'A-Z' 'a-z'; }
+is_true() { [ "$(lower "${1:-}")" = "true" ]; }
+
+# PHPの単一引用符文字列に入れる値(\ と ' をエスケープ)。
+php_quote() { printf '%s' "$1" | sed -e 's/\\/\\\\/g' -e "s/'/\\\\'/g"; }
+
+# NAME か NAME_FILE のどちらかから値を得る(両方指定はエラー)。結果は secret_result。
+secret_value() {
+	secret_result=""
+	_name="$1"; _default="$2"
+	eval "_val=\${${_name}:-}"
+	eval "_file=\${${_name}_FILE:-}"
+	if [ -n "${_val}" ] && [ -n "${_file}" ]; then
+		fail "${_name} and ${_name}_FILE are both set; set only one."
+	fi
+	if [ -n "${_file}" ]; then
+		[ -r "${_file}" ] || fail "${_name}_FILE=${_file} is not readable."
+		_val="$(cat "${_file}")"
+	fi
+	[ -n "${_val}" ] || _val="${_default}"
+	secret_result="${_val}"
+}
+
+# --- データベース ---------------------------------------------------------------
+secret_value MYSQL_USER zabbix
+DB_USER="${secret_result}"
+secret_value MYSQL_PASSWORD ""
+DB_PASSWORD="${secret_result}"
+[ -n "${DB_PASSWORD}" ] || fail "MYSQL_PASSWORD (or MYSQL_PASSWORD_FILE) is not set. This variable is mandatory for Zabbix web to connect to the database."
+
+DB_HOST="${DB_SERVER_HOST:-mysql-server}"
+DB_PORT="${DB_SERVER_PORT:-3306}"
+DB_NAME="${MYSQL_DATABASE:-zabbix}"
+ZSERVER="${ZBX_SERVER_HOST:-zabbix-server}"
+ZPORT="${ZBX_SERVER_PORT:-10051}"
+ZNAME="${ZBX_SERVER_NAME:-}"
+TZ_NAME="${PHP_TZ:-UTC}"
+
+for _v in DB_HOST DB_PORT DB_NAME DB_USER ZSERVER ZPORT ZNAME TZ_NAME; do
+	eval "_x=\${${_v}}"
+	single_line "${_v}" "${_x}"
+done
+
+# 公式の既定は DB_DOUBLE_IEEE754 有効。
+DOUBLE_IEEE754=true
+if [ "$(lower "${DB_DOUBLE_IEEE754:-true}")" = "false" ]; then DOUBLE_IEEE754=false; fi
+
+DB_ENCRYPTION=false
+if is_true "${ZBX_DB_ENCRYPTION:-}"; then DB_ENCRYPTION=true; fi
+DB_VERIFY=false
+if is_true "${ZBX_DB_VERIFY_HOST:-}"; then DB_VERIFY=true; fi
+
+# --- PHP -------------------------------------------------------------------------
+for _v in ZBX_MAXEXECUTIONTIME ZBX_MEMORYLIMIT ZBX_POSTMAXSIZE ZBX_UPLOADMAXFILESIZE ZBX_MAXINPUTTIME ZBX_SESSION_NAME; do
+	eval "_x=\${${_v}:-}"
+	single_line "${_v}" "${_x}"
+done
+INI_LINES="max_execution_time = ${ZBX_MAXEXECUTIONTIME:-300}
+memory_limit = ${ZBX_MEMORYLIMIT:-128M}
+post_max_size = ${ZBX_POSTMAXSIZE:-16M}
+upload_max_filesize = ${ZBX_UPLOADMAXFILESIZE:-2M}
+max_input_time = ${ZBX_MAXINPUTTIME:-300}
+date.timezone = ${TZ_NAME}"
+if [ -n "${ZBX_SESSION_NAME:-}" ]; then
+	INI_LINES="${INI_LINES}
+session.name = ${ZBX_SESSION_NAME}"
 fi
 
-echo "**** Applying PHP_TZ=${PHP_TZ} to date.timezone..."
-# `sed -i` writes a temp file into the target's own directory before renaming
-# it into place, which needs write access on the DIRECTORY, not just the file.
-# The image intentionally chowns only this one file to the non-root zabbix
-# user (least-privilege; the directory itself stays root-owned), so `sed -i`
-# fails here with a permission error. Read + rewrite through a shell variable
-# instead: that only needs to open the already zabbix-owned file for writing,
-# never touching the directory.
-# sedの区切り文字を`/`以外(`|`)にする — PHP_TZはAsia/Tokyoのように`/`を含むのが
-# 通常であり、`/`区切りのままでは置換文字列側の`/`がsedコマンドの区切りと衝突して
-# 構文エラーになる(既定値UTCには`/`が無いため、これまで表面化していなかった)。
-ZBX_INI_CONTENT="$(sed "s|^date.timezone = .*|date.timezone = ${PHP_TZ}|" /etc/php83/conf.d/99-zabbix.ini)"
-printf '%s\n' "${ZBX_INI_CONTENT}" > /etc/php83/conf.d/99-zabbix.ini
+echo "**** Writing PHP settings (date.timezone=${TZ_NAME})..."
+printf '%s\n' "; Generated by docker/web/entrypoint.sh at container start." "${INI_LINES}" > "${PHP_INI_FILE}"
 
+# PHP-FPMのプロセス管理。
+FPM_LINES="[www]"
+for _pair in PHP_FPM_PM:pm PHP_FPM_PM_MAX_CHILDREN:pm.max_children PHP_FPM_PM_START_SERVERS:pm.start_servers \
+	PHP_FPM_PM_MIN_SPARE_SERVERS:pm.min_spare_servers PHP_FPM_PM_MAX_SPARE_SERVERS:pm.max_spare_servers \
+	PHP_FPM_PM_MAX_REQUESTS:pm.max_requests; do
+	_var="${_pair%%:*}"
+	_key="${_pair#*:}"
+	eval "_x=\${${_var}:-}"
+	[ -n "${_x}" ] || continue
+	single_line "${_var}" "${_x}"
+	FPM_LINES="${FPM_LINES}
+${_key} = ${_x}"
+done
+printf '%s\n' "; Generated by docker/web/entrypoint.sh at container start." "${FPM_LINES}" > "${FPM_POOL_FILE}"
+
+# --- zabbix.conf.php ---------------------------------------------------------------
 echo "**** Generating ${CONFIG_FILE} from environment variables..."
-
-cat > "${CONFIG_FILE}" <<CONF
+umask 077
+{
+	cat <<CONF
 <?php
 // Generated by docker/web/entrypoint.sh at container start — do not edit by hand, it is
 // overwritten on every restart.
 
-global \$DB;
+global \$DB, \$HISTORY, \$SSO;
 
 \$DB['TYPE']     = 'MYSQL';
-\$DB['SERVER']   = '${DB_SERVER_HOST}';
-\$DB['PORT']     = '${DB_SERVER_PORT}';
-\$DB['DATABASE'] = '${MYSQL_DATABASE}';
-\$DB['USER']     = '${MYSQL_USER}';
-\$DB['PASSWORD'] = '${MYSQL_PASSWORD}';
+\$DB['SERVER']   = '$(php_quote "${DB_HOST}")';
+\$DB['PORT']     = '$(php_quote "${DB_PORT}")';
+\$DB['DATABASE'] = '$(php_quote "${DB_NAME}")';
+\$DB['USER']     = '$(php_quote "${DB_USER}")';
+\$DB['PASSWORD'] = '$(php_quote "${DB_PASSWORD}")';
 \$DB['SCHEMA']   = '';
 
-\$DB['ENCRYPTION']  = false;
-\$DB['KEY_FILE']    = '';
-\$DB['CERT_FILE']   = '';
-\$DB['CA_FILE']     = '';
-\$DB['VERIFY_HOST'] = false;
-\$DB['CIPHER_LIST'] = '';
+\$DB['ENCRYPTION']  = ${DB_ENCRYPTION};
+\$DB['KEY_FILE']    = '$(php_quote "${ZBX_DB_KEY_FILE:-}")';
+\$DB['CERT_FILE']   = '$(php_quote "${ZBX_DB_CERT_FILE:-}")';
+\$DB['CA_FILE']     = '$(php_quote "${ZBX_DB_CA_FILE:-}")';
+\$DB['VERIFY_HOST'] = ${DB_VERIFY};
+\$DB['CIPHER_LIST'] = '$(php_quote "${ZBX_DB_CIPHER_LIST:-}")';
 
-\$ZBX_SERVER      = '${ZBX_SERVER_HOST}';
-\$ZBX_SERVER_PORT = '${ZBX_SERVER_PORT}';
-\$ZBX_SERVER_NAME = '${ZBX_SERVER_NAME}';
+\$DB['DOUBLE_IEEE754'] = ${DOUBLE_IEEE754};
+
+\$ZBX_SERVER      = '$(php_quote "${ZSERVER}")';
+\$ZBX_SERVER_PORT = '$(php_quote "${ZPORT}")';
+\$ZBX_SERVER_NAME = '$(php_quote "${ZNAME}")';
 
 \$IMAGE_FORMAT_DEFAULT = IMAGE_FORMAT_PNG;
 CONF
+	# Vault(フロントエンドは3つ揃ったときだけ使う)。
+	if [ -n "${ZBX_VAULTURL:-}" ]; then
+		echo "\$DB['VAULT_URL']     = '$(php_quote "${ZBX_VAULTURL}")';"
+		echo "\$DB['VAULT_DB_PATH'] = '$(php_quote "${ZBX_VAULTDBPATH:-}")';"
+		echo "\$DB['VAULT_TOKEN']   = '$(php_quote "${VAULT_TOKEN:-}")';"
+	fi
+	if [ -n "${ZBX_HISTORYSTORAGEURL:-}" ]; then
+		echo "\$HISTORY['url'] = '$(php_quote "${ZBX_HISTORYSTORAGEURL}")';"
+		if [ -n "${ZBX_HISTORYSTORAGETYPES:-}" ]; then
+			# 例: ["uint","dbl"] または uint,dbl
+			_types="$(printf '%s' "${ZBX_HISTORYSTORAGETYPES}" | tr -d '[]" ' | sed "s/,/', '/g")"
+			echo "\$HISTORY['types'] = ['${_types}'];"
+		fi
+	fi
+	[ -z "${ZBX_SSO_SP_KEY:-}" ] || echo "\$SSO['SP_KEY'] = '$(php_quote "${ZBX_SSO_SP_KEY}")';"
+	[ -z "${ZBX_SSO_SP_CERT:-}" ] || echo "\$SSO['SP_CERT'] = '$(php_quote "${ZBX_SSO_SP_CERT}")';"
+	[ -z "${ZBX_SSO_IDP_CERT:-}" ] || echo "\$SSO['IDP_CERT'] = '$(php_quote "${ZBX_SSO_IDP_CERT}")';"
+} > "${CONFIG_FILE}"
+umask 022
+
+# --- nginx -------------------------------------------------------------------------
+mkdir -p "${NGINX_SNIPPET_DIR}"
+HTTP_SNIPPET="${NGINX_SNIPPET_DIR}/http.conf"
+SERVER_SNIPPET="${NGINX_SNIPPET_DIR}/server.conf"
+
+{
+	if [ "$(lower "${EXPOSE_WEB_SERVER_INFO:-on}")" = "off" ]; then
+		echo "server_tokens off;"
+	else
+		echo "server_tokens on;"
+	fi
+	if [ "$(lower "${ENABLE_WEB_ACCESS_LOG:-true}")" = "false" ]; then
+		echo "access_log off;"
+	else
+		echo "access_log /dev/stdout;"
+	fi
+	if [ -n "${WEB_REAL_IP_FROM:-}" ]; then
+		single_line WEB_REAL_IP_FROM "${WEB_REAL_IP_FROM}"
+		for _ip in $(printf '%s' "${WEB_REAL_IP_FROM}" | tr ',' ' '); do
+			echo "set_real_ip_from ${_ip};"
+		done
+		echo "real_ip_header ${WEB_REAL_IP_HEADER:-X-Forwarded-For};"
+		echo "real_ip_recursive on;"
+	fi
+} > "${HTTP_SNIPPET}"
+
+{
+	echo "index ${HTTP_INDEX_FILE:-index.php};"
+	if [ -r "${SSL_DIR}/ssl.crt" ] && [ -r "${SSL_DIR}/ssl.key" ]; then
+		echo "listen 8443 ssl;"
+		echo "ssl_certificate ${SSL_DIR}/ssl.crt;"
+		echo "ssl_certificate_key ${SSL_DIR}/ssl.key;"
+		echo "ssl_protocols TLSv1.2 TLSv1.3;"
+		[ ! -r "${SSL_DIR}/dhparam.pem" ] || echo "ssl_dhparam ${SSL_DIR}/dhparam.pem;"
+	fi
+	if is_true "${ZBX_DENY_GUI_ACCESS:-}"; then
+		_range="${ZBX_GUI_ACCESS_IP_RANGE:-127.0.0.1}"
+		_range="$(printf '%s' "${_range}" | tr -d "[]\"'")"
+		single_line ZBX_GUI_ACCESS_IP_RANGE "${_range}"
+		_msg="${ZBX_GUI_WARNING_MSG:-Zabbix is under maintenance.}"
+		single_line ZBX_GUI_WARNING_MSG "${_msg}"
+		case "${_msg}" in
+			*"'"* | *'\'* | *'$'*) fail "ZBX_GUI_WARNING_MSG must not contain a single quote, a backslash or a dollar sign." ;;
+		esac
+		_msg="$(printf '%s' "${_msg}" | sed -e 's/&/\&amp;/g' -e 's/</\&lt;/g' -e 's/>/\&gt;/g')"
+		for _ip in $(printf '%s' "${_range}" | tr ',' ' '); do
+			echo "allow ${_ip};"
+		done
+		echo "deny all;"
+		echo "error_page 403 =503 @zbx_maintenance;"
+		echo "location @zbx_maintenance { default_type text/html; return 503 '<html><body><h1>${_msg}</h1></body></html>'; }"
+	fi
+} > "${SERVER_SNIPPET}"
+
+# このイメージが扱わない公式の変数は、黙って無視せず知らせる。
+for _v in ZBX_AUTH_TYPE ZBX_ENABLE_TLS; do
+	eval "_x=\${${_v}:-}"
+	[ -z "${_x}" ] || warn "${_v} is set but is not supported by this image."
+done
 
 echo "**** Starting PHP-FPM..."
 "${PHP_FPM_BIN}" --nodaemonize &
 
 echo "**** Starting nginx..."
-# nginxはconfig解析より前の起動処理(マスタープロセスのブートストラップ)で、
-# nginx.conf内のerror_logディレクティブが効くよりも先にコンパイル時既定のログパス
-# (/var/lib/nginx/logs/error.log、root所有)を開こうとする。非rootのzabbixユーザー
-# では書き込めず[emerg]で即座に落ちる(実機テストで判明。nginx.conf側のerror_log
-# 指定だけでは防げない)。`-e`コマンドラインオプションはconfig解析より前に有効になる
-# ため、これで確実にstderrへ向ける。
+# nginxはconfig解析より前の起動処理でコンパイル時既定のログパス(root所有)を開こうとして、
+# 非rootでは[emerg]で落ちる。`-e`はconfig解析より前に効くので、これでstderrへ向ける。
 exec nginx -e /dev/stderr -g "daemon off;"
