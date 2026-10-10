@@ -78,9 +78,14 @@ RUN apk add --no-cache \
 		libxml2 \
 		libcurl \
 		net-snmp-libs \
+		fping \
 		tzdata \
 		ca-certificates \
 		su-exec
+# fping: ICMPチェック(icmpping, icmppingsec, icmppingloss)用。Zabbixは既定のFpingLocationである/usr/sbin/fpingを
+# 実行し、無いとアイテムがサポート外になる(公式イメージにも入っている)。Alpineのパッケージはcap_net_rawを
+# 持つので、コンテナにNET_RAWを許せばzabbixユーザーでも動く(compose.ymlが付ける。DockerはNET_RAWを既定で
+# 持つがPodmanは持たない)。
 
 # UID/GID 1997: zabbix-5.0の前例に合わせ、webイメージのnginxグループ(101)との
 # 衝突を避ける値を全コンポーネントで統一する。
@@ -90,7 +95,9 @@ RUN addgroup -g 1997 -S zabbix \
 COPY --from=builder /build/src/zabbix_server/zabbix_server /usr/sbin/zabbix_server
 COPY --from=builder /build/conf/zabbix_server.conf /etc/zabbix/zabbix_server.conf.default
 
-RUN mkdir -p /etc/zabbix /var/lib/zabbix/alertscripts /var/lib/zabbix/externalscripts /var/lib/zabbix/enc \
+# enc_internal: ZBX_TLSCA・ZBX_TLSKEY等のTLS素材を、ファイルではなく値そのもので渡されたときにentrypoint.shが
+# 書き出す先。
+RUN mkdir -p /etc/zabbix /var/lib/zabbix/alertscripts /var/lib/zabbix/externalscripts /var/lib/zabbix/enc /var/lib/zabbix/enc_internal \
 		/var/lib/zabbix/export /var/lib/zabbix/modules /run/zabbix \
 	&& chown -R zabbix:zabbix /etc/zabbix /var/lib/zabbix /run/zabbix
 

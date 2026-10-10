@@ -39,6 +39,9 @@ services:
         ALPINE_VERSION: ${ALPINE_VERSION:-3.24}
     image: tamacat/zabbix-server-mysql:${ZABBIX_IMAGE_TAG:-6.0-custom}
     container_name: zabbix-server
+    # fping(ICMPチェック)は生ソケットが要る。DockerはNET_RAWを既定で許すがPodmanは許さないため、明示する。
+    cap_add:
+      - NET_RAW
     networks:
       - zbxnet
     environment:
