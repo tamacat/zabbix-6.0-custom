@@ -25,6 +25,7 @@ ARG PHP_PKG=php83
 RUN apk upgrade --no-cache
 
 RUN apk add --no-cache \
+		font-ipa \
 		nginx \
 		${PHP_PKG} \
 		${PHP_PKG}-fpm \
@@ -68,6 +69,12 @@ RUN sed -i 's#^;error_log = .*#error_log = /proc/self/fd/2#' /etc/${PHP_PKG}/php
 # ui/conf/zabbix.conf.php はソースに存在しない(.exampleのみ) — entrypoint.shが
 # 環境変数からコンテナ起動時に生成するため、イメージには焼き込まない。
 COPY --chown=zabbix:zabbix ${ZABBIX_SRC_DIR}/ui/ /usr/share/zabbix/
+
+# グラフ内の文字に日本語フォントを使う。ZBX_GRAPH_FONT_NAMEは'IPAPGothic'(include/defines.inc.php)で、
+# assets/fonts/IPAPGothic.ttf として探される。同梱のDejaVuSans.ttfには日本語のグリフが無く、
+# 日本語のアイテム名・ホスト名・凡例がグラフで□になっていた。font-ipa(IPAゴシック/明朝、TTF)は上で導入済み。
+# (回転して描く数字に使うZBX_FONT_NAMEはDejaVuSansのまま。)
+RUN ln -s /usr/share/fonts/ipafont/ipagp.ttf /usr/share/zabbix/assets/fonts/IPAPGothic.ttf
 
 RUN mkdir -p /usr/share/zabbix/conf /tmp/zabbix-nginx /tmp/nginx-client-body /tmp/nginx-proxy /tmp/nginx-fastcgi \
 		/tmp/nginx-uwsgi /tmp/nginx-scgi \
