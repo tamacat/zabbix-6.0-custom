@@ -172,3 +172,19 @@ EOF
 	[ "$status" -ne 0 ]
 	[[ "$output" == *"SHA256SUMS の検証に失敗"* ]]
 }
+
+@test "コンテナのルートごとではなく、成果物のファイルだけを取り出す(dev/ 等が dist に混ざらない)" {
+	cd "${REPO_ROOT}"
+	run env \
+		ZABBIX_SRC_DIR="${TEST_TMPDIR}" \
+		ZABBIX_VERSION=6.0.48 \
+		BUILD_DATE=20260920 \
+		DIST_DIR="${DIST}" \
+		bash scripts/build-agent2-binaries.sh
+
+	[ "$status" -eq 0 ]
+	! grep -q "docker cp .*:/\. " "${DOCKER_LOG}"
+	grep -q "docker cp .*:/${PREFIX}-linux-amd64.tar.gz" "${DOCKER_LOG}"
+	grep -q "docker cp .*:/SHA256SUMS" "${DOCKER_LOG}"
+	[ "$(ls "${DIST}" | wc -l)" -eq 3 ]
+}

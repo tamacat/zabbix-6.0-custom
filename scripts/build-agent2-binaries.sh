@@ -107,15 +107,19 @@ CONTAINER_NAME="zabbix-agent2-binaries-$$"
 docker create --name "${CONTAINER_NAME}" "${BUILDER_IMAGE}" /artifacts >/dev/null \
 	|| fail "成果物取り出し用のコンテナを作れませんでした"
 
-rm -rf "${DIST_DIR}"
-mkdir -p "${DIST_DIR}"
-docker cp "${CONTAINER_NAME}:/." "${DIST_DIR}/" || fail "成果物をコンテナから取り出せませんでした"
-
 EXPECTED_FILES=(
 	"${ASSET_PREFIX}-linux-amd64.tar.gz"
 	"${ASSET_PREFIX}-windows-amd64.zip"
 	SHA256SUMS
 )
+
+rm -rf "${DIST_DIR}"
+mkdir -p "${DIST_DIR}"
+# コンテナのルートごと(`:/.`)ではなく、成果物のファイルだけを取り出す。ルートごとだと、Docker本体では
+# コンテナにある空の dev/ 等のディレクトリまで ${DIST_DIR} に入り、Releaseに添付するファイルの一覧が汚れる。
+for f in "${EXPECTED_FILES[@]}"; do
+	docker cp "${CONTAINER_NAME}:/${f}" "${DIST_DIR}/" || fail "成果物 ${f} をコンテナから取り出せませんでした"
+done
 for f in "${EXPECTED_FILES[@]}"; do
 	[ -s "${DIST_DIR}/${f}" ] || fail "期待する成果物がありません: ${DIST_DIR}/${f}"
 done
