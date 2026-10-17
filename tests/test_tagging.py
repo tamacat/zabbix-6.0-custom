@@ -8,9 +8,11 @@ from datetime import datetime
 
 from release_tools.models import PublishedImage
 from release_tools.tagging import (
+    generate_release_tag,
     generate_tag,
     image_repository,
     is_floating_tag,
+    release_asset_prefix,
     require_self_review_confirmation,
 )
 
@@ -117,3 +119,34 @@ def test_require_self_review_confirmation_false_when_explicitly_declined():
 def test_require_self_review_confirmation_uses_prompt_when_not_preconfirmed():
     assert require_self_review_confirmation(prompt_fn=lambda _: "yes") is True
     assert require_self_review_confirmation(prompt_fn=lambda _: "no") is False
+
+
+def test_generate_release_tag_has_version_and_build_date():
+    assert generate_release_tag("6.0.48", "20261017") == "agent2-6.0.48-b20261017"
+
+
+def test_generate_release_tag_differs_between_rebuilds_of_the_same_version():
+    # A rebuild with no code change (a refreshed dependency) must not collide with the earlier release.
+    assert generate_release_tag("6.0.48", "20261017") != generate_release_tag("6.0.48", "20261024")
+
+
+@pytest.mark.parametrize("version", ["", "6.0", "6.0.48-rc1", "latest", "v6.0.48"])
+def test_generate_release_tag_rejects_malformed_version(version):
+    with pytest.raises(ValueError):
+        generate_release_tag(version, "20261017")
+
+
+@pytest.mark.parametrize("build_date", ["", "2026-10-17", "261017", "latest"])
+def test_generate_release_tag_rejects_malformed_build_date(build_date):
+    with pytest.raises(ValueError):
+        generate_release_tag("6.0.48", build_date)
+
+
+def test_release_asset_prefix_includes_the_build_date():
+    # The build date keeps files from different releases apart when downloaded into one folder.
+    assert release_asset_prefix("6.0.48", "20261017") == "zabbix_agent2-6.0.48-b20261017"
+
+
+def test_release_asset_prefix_rejects_the_same_bad_input_as_the_tag():
+    with pytest.raises(ValueError):
+        release_asset_prefix("6.0.48", "2026-10-17")

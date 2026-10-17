@@ -20,10 +20,11 @@ from pathlib import Path
 from typing import Optional
 
 from . import gate as gate_mod
+from .archivefile import ArchiveFileError, extract_archive_file
 from .imagefile import ImageFileError, extract_image_file
 from .models import COMPONENT_NAMES
 from .registry import VulnerabilityRegistry, VulnerabilityRegistryError
-from .tagging import generate_tag, require_self_review_confirmation
+from .tagging import generate_release_tag, generate_tag, release_asset_prefix, require_self_review_confirmation
 
 DEFAULT_REGISTRY_PATH = "data/vulnerability-registry.yaml"
 
@@ -109,6 +110,19 @@ def cmd_generate_tag(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_generate_release_tag(args: argparse.Namespace) -> int:
+    try:
+        if args.asset_prefix:
+            value = release_asset_prefix(args.zabbix_version, args.build_date)
+        else:
+            value = generate_release_tag(args.zabbix_version, args.build_date)
+    except ValueError as exc:
+        print(f"generate-release-tag失敗: {exc}", file=sys.stderr)
+        return 1
+    print(value)
+    return 0
+
+
 MAX_LISTED_FINDINGS = 50
 
 
@@ -189,6 +203,16 @@ def cmd_extract_image_file(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_extract_archive_file(args: argparse.Namespace) -> int:
+    try:
+        size = extract_archive_file(Path(args.archive), args.path, Path(args.output))
+    except (ArchiveFileError, OSError, ValueError) as exc:
+        print(f"extract-archive-file失敗: {exc}", file=sys.stderr)
+        return 1
+    print(f"{args.path}: {size}バイトを {args.output} へ取り出しました")
+    return 0
+
+
 def cmd_publish_gate(args: argparse.Namespace) -> int:
     ok = gate_mod.publish_gate(args.sca, args.sast, args.compat, args.secret)
     print("Pass" if ok else "Fail")
@@ -252,6 +276,19 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--arch", default="amd64")
     p.set_defaults(func=cmd_generate_tag)
 
+    p = sub.add_parser(
+        "generate-release-tag",
+        help="zabbix-agent2の単体バイナリ(GitHub Releases)のタグを生成する",
+    )
+    p.add_argument("--zabbix-version", required=True)
+    p.add_argument("--build-date", required=True, help="YYYYMMDD")
+    p.add_argument(
+        "--asset-prefix",
+        action="store_true",
+        help="タグの代わりに、添付するアーカイブ名の共通の接頭辞(zabbix_agent2-<version>-b<date>)を出力する",
+    )
+    p.set_defaults(func=cmd_generate_release_tag)
+
     p = sub.add_parser("scan-gate", help="スキャン結果を正規化しBR2.1のゲート判定を行う")
     p.add_argument("--tool", required=True, choices=("trivy", "semgrep", "cppcheck", "govulncheck"))
     p.add_argument("--input", required=True, help="ツール出力ファイルのパス")
@@ -279,6 +316,12 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--path", required=True, help="イメージ内のパス(例: usr/sbin/zabbix_agent2)")
     p.add_argument("--output", required=True, help="取り出し先のファイル")
     p.set_defaults(func=cmd_extract_image_file)
+
+    p = sub.add_parser("extract-archive-file", help="配布用アーカイブ(.tar.gz・.zip)から、展開せずに1ファイルを取り出す")
+    p.add_argument("--archive", required=True, help="アーカイブのパス")
+    p.add_argument("--path", required=True, help="アーカイブ内のパス")
+    p.add_argument("--output", required=True, help="取り出し先のファイル")
+    p.set_defaults(func=cmd_extract_archive_file)
 
     p = sub.add_parser("publish-gate", help="BR3.1の4条件を判定する")
     p.add_argument("--sca", required=True, choices=("Pass", "Fail"))

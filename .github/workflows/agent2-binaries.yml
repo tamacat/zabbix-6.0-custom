@@ -1,0 +1,211 @@
+# zabbix-agent2 の単体バイナリ(Linux x86_64・Windows 64bit)をビルド・検査し、GitHub Releasesで配布する。
+# コンテナイメージの CI / Release(ci-release.yml)とは別の成果物なので、別のワークフローにしている。
+#
+# 手動実行(workflow_dispatch)でだけ公開する。`publish` を付けない実行と、関連ファイルを変更する
+# プルリクエストでは、ビルドと検査だけを行い、Releaseは作らない。
+name: Agent2 binaries
+
+on:
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: "Create a GitHub Release (waits for approval of the production environment). Off = build and test only."
+        type: boolean
+        default: false
+  pull_request:
+    branches: [main]
+    paths:
+      - docker/agent2-binaries/**
+      - scripts/build-agent2-binaries.sh
+      - scripts/scan-agent2-binaries.sh
+      - release_tools/**
+      - .github/workflows/agent2-binaries.yml
+
+env:
+  ZABBIX_VERSION: "6.0.48"
+  ALPINE_VERSION: "3.24"
+  REGISTRY_PATH: "data/vulnerability-registry.yaml"
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build and scan (Linux + Windows)
+    runs-on: ubuntu-latest
+    outputs:
+      build_date: ${{ steps.vars.outputs.build_date }}
+      release_tag: ${{ steps.vars.outputs.release_tag }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+
+      - name: Install Python dependencies
+        run: pip install PyYAML
+
+      - name: Compute build date and release tag
+        id: vars
+        run: |
+          build_date="$(date -u +%Y%m%d)"
+          echo "build_date=${build_date}" >> "$GITHUB_OUTPUT"
+          echo "release_tag=$(python3 -m release_tools.cli generate-release-tag \
+            --zabbix-version "${ZABBIX_VERSION}" --build-date "${build_date}")" >> "$GITHUB_OUTPUT"
+
+      - name: Build the binaries
+        env:
+          BUILD_DATE: ${{ steps.vars.outputs.build_date }}
+        run: ./scripts/build-agent2-binaries.sh
+
+      # govulncheck(Go公式)は、バイナリが実際に呼ぶGoのコードの脆弱性を判定する。Linux版・Windows版の
+      # 両方を検査し、どちらかにwaiverの無い指摘があれば、ここで止まってReleaseに進まない。
+      - uses: actions/setup-go@v7
+        with:
+          go-version: "1.26"
+          cache: false
+
+      - name: Install govulncheck
+        run: |
+          go install golang.org/x/vuln/cmd/govulncheck@v1.8.0
+          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+
+      - name: Scan the Go code in both binaries (govulncheck gate)
+        run: ./scripts/scan-agent2-binaries.sh dist
+
+      # 作ったLinux版が、ビルドに使ったAlpineではなく、このUbuntu(glibc)のランナーでそのまま動くこと。
+      - name: Smoke test the Linux binary
+        run: |
+          set -euo pipefail
+          archive="$(ls dist/*-linux-amd64.tar.gz)"
+          mkdir smoke && tar -xzf "${archive}" -C smoke
+          dir="$(ls -d smoke/*-linux-amd64)"
+          printf 'LogType=console\nServer=127.0.0.1\nHostname=ci-smoke\n' > smoke/test.conf
+          "${dir}/sbin/zabbix_agent2" -V
+          "${dir}/sbin/zabbix_agent2" -V | grep -q "${ZABBIX_VERSION}"
+          "${dir}/sbin/zabbix_agent2" -c smoke/test.conf -t agent.ping | grep -F '[s|1]'
+          "${dir}/sbin/zabbix_agent2" -c smoke/test.conf -t agent.version | grep -F "[s|${ZABBIX_VERSION}]"
+          # 静的リンクであること(共有ライブラリに依存しない)。
+          ! ldd "${dir}/sbin/zabbix_agent2" 2>/dev/null | grep -q 'libc.so'
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: agent2-binaries-${{ steps.vars.outputs.build_date }}
+          path: dist/
+          if-no-files-found: error
+
+  smoke-windows:
+    # 作ったWindows版が、実際のWindowsで動くこと(クロスコンパイルしたexeなので、Windowsで一度は動かす)。
+    name: Smoke test the Windows binary
+    needs: build
+    runs-on: windows-latest
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: agent2-binaries-${{ needs.build.outputs.build_date }}
+          path: dist
+
+      - name: Verify checksum, unpack and run
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $zip = Get-ChildItem dist -Filter '*-windows-amd64.zip' | Select-Object -First 1
+          $expected = (Get-Content dist/SHA256SUMS | Where-Object { $_ -match [regex]::Escape($zip.Name) }) -split '\s+' | Select-Object -First 1
+          $actual = (Get-FileHash $zip.FullName -Algorithm SHA256).Hash.ToLower()
+          if ($actual -ne $expected) { throw "checksum mismatch: $actual != $expected" }
+
+          Expand-Archive $zip.FullName -DestinationPath smoke
+          $dir = Get-ChildItem smoke -Directory | Select-Object -First 1
+          $exe = Join-Path $dir.FullName 'bin/zabbix_agent2.exe'
+          $conf = Join-Path $dir.FullName 'conf/zabbix_agent2.win.conf'
+          "LogType=console`nServer=127.0.0.1`nHostname=ci-smoke" | Set-Content smoke/test.conf
+
+          & $exe -V
+          if ($LASTEXITCODE -ne 0) { throw "-V failed" }
+          $version = (& $exe -V | Out-String)
+          if ($version -notmatch [regex]::Escape($env:ZABBIX_VERSION)) { throw "unexpected version: $version" }
+          if ($version -notmatch 'OpenSSL') { throw "built without OpenSSL" }
+
+          $ping = (& $exe -c smoke/test.conf -t agent.ping | Out-String)
+          if ($ping -notmatch '\[s\|1\]') { throw "agent.ping failed: $ping" }
+          $ver = (& $exe -c smoke/test.conf -t agent.version | Out-String)
+          if ($ver -notmatch "\[s\|$($env:ZABBIX_VERSION)\]") { throw "agent.version failed: $ver" }
+          # Regular-expression support (PCRE2) and the file plugin (libiconv) are linked in statically.
+          $re = (& $exe -c smoke/test.conf -t 'vfs.file.regexp[C:/Windows/win.ini,fonts]' | Out-String)
+          if ($re -notmatch '\[s\|') { throw "vfs.file.regexp failed: $re" }
+          # The shipped default configuration must at least load.
+          & $exe -c $conf -t agent.ping
+          if ($LASTEXITCODE -ne 0) { throw "the shipped default configuration does not load" }
+
+  release:
+    # セルフレビュー承認ゲート(BR3.2)→ 署名 → GitHub Release。コンテナイメージの公開(ci-release.yml の
+    # publish ジョブ)と同じ `production` Environment の承認を使う。`publish` を付けた手動実行でだけ動く。
+    #
+    # このワークフローのゲートはgovulncheck(Go)とスモークテストまで。ソースのSAST・シークレット
+    # スキャンは ci-release.yml(push・定期実行)が行うので、Releaseを作るコミットでそれが成功している
+    # ことを承認時に確認する。
+    name: Release (manual self-review gate)
+    # main から実行した場合だけ作る(作業ブランチのコミットからReleaseを作らない)。
+    if: github.event_name == 'workflow_dispatch' && inputs.publish && github.ref == 'refs/heads/main'
+    needs: [build, smoke-windows]
+    runs-on: ubuntu-latest
+    environment: production
+    permissions:
+      contents: write # gh release create
+      id-token: write # cosign keyless署名(Sigstore OIDC)用
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: agent2-binaries-${{ needs.build.outputs.build_date }}
+          path: dist
+
+      - name: Verify the checksums
+        working-directory: dist
+        run: sha256sum -c SHA256SUMS
+
+      - uses: sigstore/cosign-installer@v4.1.2
+
+      - name: Sign the archives and the checksum file (cosign keyless)
+        working-directory: dist
+        run: |
+          set -euo pipefail
+          for f in *.tar.gz *.zip SHA256SUMS; do
+            cosign sign-blob --yes --bundle "${f}.sigstore.json" "${f}"
+          done
+
+      - name: Create the GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ needs.build.outputs.release_tag }}
+        run: |
+          set -euo pipefail
+          cat > notes.md <<EOF
+          Standalone **zabbix_agent2 ${ZABBIX_VERSION}** for Linux (x86_64, static) and Windows (64-bit),
+          built from the Zabbix ${ZABBIX_VERSION} source in this repository at commit ${GITHUB_SHA}.
+
+          | File | |
+          |---|---|
+          | \`*-linux-amd64.tar.gz\` | Linux x86_64, statically linked (musl): runs on any distribution |
+          | \`*-windows-amd64.zip\` | Windows 64-bit, statically linked: no extra DLLs |
+          | \`SHA256SUMS\` | checksums of the two archives |
+          | \`*.sigstore.json\` | keyless cosign signatures (Sigstore bundles) |
+
+          Verify a download:
+
+          \`\`\`
+          sha256sum -c SHA256SUMS --ignore-missing
+          cosign verify-blob --bundle <file>.sigstore.json \\
+            --certificate-identity-regexp '^https://github.com/${GH_REPO}/.github/workflows/agent2-binaries.yml@' \\
+            --certificate-oidc-issuer https://token.actions.githubusercontent.com <file>
+          \`\`\`
+
+          The Windows executable is not Authenticode-signed, so SmartScreen may warn on first run.
+          Each archive contains a README.txt with install steps, and the licenses of the bundled libraries.
+          EOF
+          gh release create "${RELEASE_TAG}" \
+            --target "${GITHUB_SHA}" \
+            --title "zabbix_agent2 ${ZABBIX_VERSION} (build ${RELEASE_TAG##*-b})" \
+            --notes-file notes.md \
+            dist/*

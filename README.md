@@ -143,6 +143,70 @@ docker pull tamacat/zabbix-server-mysql:6.0.48-alpine-b20260925
 Images are signed with cosign (keyless) and carry a CycloneDX SBOM attestation;
 publishing waits for approval on the `production` GitHub Environment.
 
+## Standalone agent2 binaries (GitHub Releases)
+
+`zabbix_agent2` is also published as plain binaries, for hosts where a
+container is not an option. Each [Release](../../releases) (tag
+`agent2-<zabbix-version>-b<build-date>`, e.g. `agent2-6.0.48-b20261017`)
+carries:
+
+| File | Contents |
+|---|---|
+| `zabbix_agent2-<version>-b<date>-linux-amd64.tar.gz` | Linux x86_64, **fully static** (musl) — runs on any distribution, no shared libraries needed |
+| `zabbix_agent2-<version>-b<date>-windows-amd64.zip` | Windows 64-bit, OpenSSL/PCRE2/libiconv linked in — no extra DLLs |
+| `SHA256SUMS` | checksums of the two archives |
+| `*.sigstore.json` | keyless cosign signatures (Sigstore bundles) for each file above |
+
+Each archive holds the agent, its default configuration, the per-plugin
+configuration, the licenses, and a `README.txt` with the install steps. The
+layout follows the official packages (`sbin/` or `bin/`, `conf/`).
+
+```bash
+# Verify, then unpack (Linux)
+sha256sum -c SHA256SUMS --ignore-missing
+cosign verify-blob --bundle SHA256SUMS.sigstore.json \
+  --certificate-identity-regexp '^https://github.com/tamacat/zabbix-6.0-custom/.github/workflows/agent2-binaries.yml@' \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com SHA256SUMS
+tar -xzf zabbix_agent2-6.0.48-b20261017-linux-amd64.tar.gz
+```
+
+On Windows, edit `conf\zabbix_agent2.win.conf`, then in an elevated prompt
+run `bin\zabbix_agent2.exe -c <absolute path to the .conf> --install` and
+`--start` (full steps are in the archive's `README.txt`). The Windows
+executable is not code-signed, so SmartScreen may warn on first run.
+
+Things to know:
+
+- **Build.** `scripts/build-agent2-binaries.sh` builds both binaries in
+  containers (`docker/agent2-binaries/Dockerfile`) and writes the archives to
+  `dist/`. The Windows `.exe` is cross-compiled on Alpine with MinGW-w64,
+  following the upstream `build/mingw/Makefile` step by step
+  (`docker/agent2-binaries/build-windows.sh`); OpenSSL, PCRE2 and libiconv for
+  it are built from source tarballs pinned by version and SHA-256 in the
+  Dockerfile. `tests/test_agent2_binaries.py` checks that the object list stays
+  in step with the upstream Makefile when the Zabbix source is updated.
+- **Scanning.** `scripts/scan-agent2-binaries.sh` runs `govulncheck` on both
+  binaries (Linux ELF and Windows PE) and applies the same waiver-aware gate as
+  the images. govulncheck covers the **Go** code only. The statically linked C
+  libraries (OpenSSL, PCRE2, libiconv in the Windows build; the Alpine static
+  libraries in the Linux build) are not seen by it or by Trivy, so their
+  versions are pinned in `docker/agent2-binaries/Dockerfile` and must be
+  checked against upstream security advisories and bumped on a schedule — do
+  this alongside the periodic base-image rebuild.
+- **Go version.** `GOTOOLCHAIN` is pinned to the same value as
+  `docker/agent2/Dockerfile` (a test enforces it), because the Go standard
+  library is compiled into both.
+- **Linux limits.** Static musl binary: users and groups come from
+  `/etc/passwd` and `/etc/group` (no NSS modules such as LDAP/SSSD). There is no
+  systemd unit and no deb/rpm package.
+- **Publishing.** The [Agent2 binaries](.github/workflows/agent2-binaries.yml)
+  workflow builds and tests on every relevant pull request; a manual run with
+  `publish` ticked also signs the files and creates the Release, after approval
+  on the `production` GitHub Environment (the same self-review gate as the
+  images). The workflow's own gates are govulncheck plus smoke tests (the Windows
+  binary is run on a real Windows runner); source SAST and secret scanning run in
+  `ci-release.yml`, so check that it is green for the commit you release from.
+
 ## Configuring zabbix-proxy
 
 The proxy image takes the same environment variables as the official

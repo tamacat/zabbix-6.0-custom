@@ -1,0 +1,9 @@
+# Keep the build context small and keep local-only files out of it. The Dockerfiles only COPY from
+# docker/ and from the Zabbix source directory (ZABBIX_SRC_DIR).
+.git
+.env
+dist
+sbom
+tests
+__pycache__
+.pytest_cache

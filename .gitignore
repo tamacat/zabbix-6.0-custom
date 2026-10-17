@@ -11,6 +11,9 @@ __pycache__/
 # bats-coreをローカルにvendorした場合の一時ディレクトリ(コミット対象外)
 /bats-core/
 
+# scripts/build-agent2-binaries.shの成果物(アーカイブ・SHA256SUMS。GitHub Releasesに添付する)
+/dist/
+
 # SBOM生成先(scripts/ci-pipeline.shの既定は$(mktemp -d)だが、SBOM_DIRをこの配下に
 # 指定した場合の取り違え防止)
 /sbom/

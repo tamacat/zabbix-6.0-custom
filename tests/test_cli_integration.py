@@ -148,3 +148,33 @@ def test_generate_tag_via_cli_matches_br41_format(component, repository, capsys)
     ])
     assert exit_code == 0
     assert out.strip() == f"tamacat/{repository}:6.0.48-alpine-b20260920"
+
+
+def test_generate_release_tag_via_cli(capsys):
+    exit_code, out = _run(None, capsys, [
+        "generate-release-tag",
+        "--zabbix-version", "6.0.48",
+        "--build-date", "20261017",
+    ])
+    assert exit_code == 0
+    assert out.strip() == "agent2-6.0.48-b20261017"
+
+
+def test_generate_release_tag_asset_prefix_via_cli(capsys):
+    exit_code, out = _run(None, capsys, [
+        "generate-release-tag",
+        "--zabbix-version", "6.0.48",
+        "--build-date", "20261017",
+        "--asset-prefix",
+    ])
+    assert exit_code == 0
+    assert out.strip() == "zabbix_agent2-6.0.48-b20261017"
+
+
+def test_generate_release_tag_via_cli_fails_on_a_bad_build_date(capsys):
+    exit_code, _ = _run(None, capsys, [
+        "generate-release-tag",
+        "--zabbix-version", "6.0.48",
+        "--build-date", "not-a-date",
+    ])
+    assert exit_code == 1

@@ -53,6 +53,31 @@ def generate_tag(component: str, zabbix_version: str, build_date: str, arch: str
     return tag
 
 
+def generate_release_tag(zabbix_version: str, build_date: str) -> str:
+    """zabbix-agent2の単体バイナリ(GitHub Releases)のタグ `agent2-<zabbix_version>-b<build_date>` を生成する。
+
+    イメージのタグ(`<zabbix_version>-alpine-b<build_date>`)と同じ「バージョン + ビルド日付」の
+    規則で、コード変更を伴わない再ビルド(依存ライブラリの更新など)でも、ビルド日付が違えば
+    衝突しない。`latest` のようなfloatingなタグは生成しない。
+    """
+    if not zabbix_version or not _ZABBIX_VERSION_PATTERN.match(zabbix_version):
+        raise ValueError(f"zabbix_version はX.Y.Z形式でなければなりません(例: 6.0.48): {zabbix_version!r}")
+    if not build_date or not _BUILD_DATE_PATTERN.match(build_date):
+        raise ValueError(f"build_date はYYYYMMDD形式の8桁でなければなりません: {build_date!r}")
+    return f"agent2-{zabbix_version}-b{build_date}"
+
+
+def release_asset_prefix(zabbix_version: str, build_date: str) -> str:
+    """Releaseに添付するアーカイブ名の共通の接頭辞 `zabbix_agent2-<zabbix_version>-b<build_date>`。
+
+    アーカイブは `<接頭辞>-linux-amd64.tar.gz` と `<接頭辞>-windows-amd64.zip`。異なるReleaseの
+    ファイルを同じフォルダにダウンロードしても取り違えないよう、ビルド日付を名前に含める。
+    """
+    # タグと同じ検証を通す(不正な入力を同じエラーで拒否する)。
+    generate_release_tag(zabbix_version, build_date)
+    return f"zabbix_agent2-{zabbix_version}-b{build_date}"
+
+
 def is_floating_tag(tag: str) -> bool:
     """タグが `latest` 等、指す先が更新され得るfloatingタグかどうかを判定する。"""
     if ":" not in tag:

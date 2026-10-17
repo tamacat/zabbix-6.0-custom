@@ -1,0 +1,28 @@
+Third-party software in the zabbix_agent2 binaries
+===================================================
+
+The Zabbix agent 2 source code is distributed under the GNU General Public License
+(see COPYING). The binaries in this archive are statically linked with the libraries
+below. The full text of each license that applies to a library listed here is in the
+licenses/ directory where noted; the corresponding source for the agent and for this
+build is the tamacat/zabbix-6.0-custom repository at the revision named in README.txt.
+
+OpenSSL                 Apache License 2.0     licenses/openssl/LICENSE.txt
+                        https://www.openssl.org/
+PCRE2                   BSD-3-Clause (with the PCRE2 exemption)
+                        licenses/pcre2/LICENCE.md       https://github.com/PCRE2Project/pcre2
+GNU libiconv            LGPL-2.1-or-later      licenses/libiconv/COPYING.LIB
+ (Windows build only)   https://www.gnu.org/software/libiconv/
+                        The library source is the unmodified upstream release named in
+                        README.txt; relinking is possible from the sources in the
+                        repository above (docker/agent2-binaries/).
+zlib (Linux build)      zlib License           https://zlib.net/zlib_license.html
+musl libc (Linux build) MIT License            https://musl.libc.org/
+                        Copyright (c) 2005-2020 Rich Felker, et al.
+Go runtime and standard library, and the Go modules vendored in the Zabbix source
+(src/go/vendor/): BSD-style, MIT and Apache-2.0 licenses; each module's license file
+is in its directory under src/go/vendor/ of the source tree.
+
+These are the libraries the build links in on purpose; the Windows executable also calls
+the Windows system libraries (kernel32, ws2_32, crypt32 and so on), which are part of
+the operating system and are not redistributed here.
