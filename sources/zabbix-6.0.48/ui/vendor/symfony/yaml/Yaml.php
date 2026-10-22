@@ -35,6 +35,8 @@ class Yaml
     public const DUMP_EMPTY_ARRAY_AS_SEQUENCE = 1024;
     public const DUMP_NULL_AS_TILDE = 2048;
     public const PARSE_EXCEPTION_ON_ALIAS = 8192;
+    // Zabbix patch (kept from the v5.1.3 copy Zabbix ships): CYamlExportWriter dumps with this flag.
+    public const DUMP_COMPACT_NESTED_MAPPING = 16384;
 
     /**
      * Parses a YAML file into a PHP value.
