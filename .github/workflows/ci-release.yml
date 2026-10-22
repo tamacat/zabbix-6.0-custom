@@ -41,6 +41,23 @@ jobs:
         continue-on-error: true
         run: shellcheck scripts/*.sh
 
+  php-version:
+    # zabbix-webのPHPはソースからビルドしており、Trivyが脆弱性を判定できない(Alpineのパッケージでは
+    # ない)。固定したPHPより新しいリリースが出ていないかを、ここで定期的に確認する。コミットごとには
+    # 実行しない(PHPの新リリースで、無関係な変更のCIが赤くなるのを避けるため)。
+    name: PHP version check (scheduled)
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+
+      - name: Compare the pinned PHP version with the latest release
+        run: ./scripts/check-php-version.sh
+
   verify:
     # BuildPipeline → ScanRunner(SCA) → ScanRunner(SAST) →
     # SecretScanner(CI、Git差分+イメージレイヤー) → SBOM生成 →

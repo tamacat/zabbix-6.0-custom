@@ -361,6 +361,31 @@ optional. The release gate always checks against the current CVE database
 at gate-evaluation time rather than relying on scan results from whenever
 the image was originally built.
 
+### PHP in `zabbix-web` is built from source
+
+The `zabbix-web` image does not use Alpine's `php83` packages: PHP is compiled
+from the official tarball in `docker/web/Dockerfile` (pinned by version and
+SHA-256, which the build verifies), so a PHP security release can be taken the
+day it is published instead of whenever Alpine packages it. The extension set is
+the same one the Alpine packages provided and Zabbix needs (and nothing else —
+no curl, sodium, sqlite3, …); `tests/test_web_php.py` keeps the list, the
+paths the entrypoint relies on, and the runtime libraries in step.
+
+Consequences to know about:
+
+- **Trivy cannot see PHP's own vulnerabilities** (it matches Alpine packages,
+  and this PHP is not one). Instead,
+  [`scripts/check-php-version.sh`](scripts/check-php-version.sh) compares the
+  pinned `PHP_VERSION` with the latest release of the same series on php.net,
+  and the weekly CI run (`php-version` job) fails when a newer one exists.
+- **Updating PHP** is a manual step: take the new version and its SHA-256 from
+  `https://www.php.net/releases/index.php?json&version=8.3`, set `PHP_VERSION`
+  and `PHP_SHA256` in `docker/web/Dockerfile`, rebuild, and check that the
+  Zabbix front end's setup prerequisites page and `scripts/compat-test.sh` pass.
+- The Alpine libraries PHP links against (libxml2, OpenSSL, libpng, …) are still
+  ordinary packages: the build's `apk upgrade` keeps them current and Trivy
+  scans them.
+
 ## License
 
 GPL-2.0, matching upstream Zabbix's own license — see [LICENSE](LICENSE).

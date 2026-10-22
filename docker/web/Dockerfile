@@ -9,9 +9,78 @@
 # ビルドコンテキストはこのディレクトリ(zabbix-6.0-custom/)自身(compose.yml参照)。
 # UIは既存アップストリームソースへのパッチ対象であり(トラックA)、本Dockerfileは
 # ビルド/実行環境のみを新規に定義する(トラックB)。
+#
+# PHPはAlpineのパッケージではなく、公式のソースからビルドする。PHPのセキュリティリリース
+# (2026-10-21の8.3.36: 認証なしのリモートコード実行2件)に対し、Alpineのphp83が追いつくのを
+# 待たずに修正版を取り込むため。有効にする拡張は、これまで使っていたAlpineのphp83パッケージと
+# 同じ集合に揃えている(下のconfigureと、tests/test_web_php.pyの一覧を参照)。
 
 ARG ALPINE_VERSION=3.24
 
+# PHPのバージョンとSHA-256。バージョンを上げるときは、php.netが公開しているSHA-256
+# (https://www.php.net/releases/index.php?json&version=<X.Y>)で確認した値に更新する。現在の値は
+# 2026-10-22に確認した。PHP本体はTrivyが脆弱性を判定できない(Alpineのパッケージではないため)ので、
+# 新しいリリースが出ていないかは scripts/check-php-version.sh と定期実行のCIが確認する。
+ARG PHP_VERSION=8.3.36
+ARG PHP_SHA256=dd54693aa334c5c4d72e9aee96b082c2473750a18a6c1d105789c93a3b1692fd
+
+# ---------------------------------------------------------------------------------------
+# PHP(php-fpm と CLI)のビルド
+# ---------------------------------------------------------------------------------------
+FROM alpine:${ALPINE_VERSION} AS php-build
+
+ARG PHP_VERSION
+ARG PHP_SHA256
+
+# hadolint ignore=DL3017
+RUN apk upgrade --no-cache
+
+# linux-headers: socketsがカーネルのヘッダー(linux/filter.h)を使う。
+RUN apk add --no-cache \
+		build-base linux-headers autoconf bison re2c pkgconf curl xz \
+		libxml2-dev openssl-dev zlib-dev pcre2-dev oniguruma-dev gettext-dev \
+		libpng-dev libjpeg-turbo-dev freetype-dev libwebp-dev
+
+WORKDIR /usr/src
+RUN curl -fsSL -o php.tar.xz "https://www.php.net/distributions/php-${PHP_VERSION}.tar.xz" \
+	&& echo "${PHP_SHA256}  php.tar.xz" | sha256sum -c - \
+	&& tar -xJf php.tar.xz --strip-components=1
+
+# --disable-all から、Zabbixが必要とする拡張だけを足す。これまで使っていたAlpineのphp83パッケージと
+# 同じ集合(bcmath ctype dom fileinfo filter gd gettext iconv mbstring mysqli mysqlnd openssl session
+# sockets tokenizer xml xmlreader xmlwriter zlib、加えてphar・opcache)で、curl・ftp・sodium・
+# sqlite3などZabbixが使わない拡張は含めない。拡張は共有ライブラリではなくPHP本体に組み込む。
+# 配置はAlpineのパッケージに合わせ(/etc/php83、php83・php-fpm83)、entrypoint.shを変えずに済むようにしている。
+RUN ./configure \
+		--prefix=/usr \
+		--sysconfdir=/etc/php83 \
+		--localstatedir=/var \
+		--program-suffix=83 \
+		--with-config-file-path=/etc/php83 \
+		--with-config-file-scan-dir=/etc/php83/conf.d \
+		--disable-all --disable-cgi --disable-phpdbg --without-pear \
+		--enable-cli --enable-fpm \
+		--enable-bcmath --enable-ctype --enable-dom --enable-fileinfo --enable-filter \
+		--enable-gd --with-freetype --with-jpeg --with-webp \
+		--with-gettext --with-iconv --enable-mbstring \
+		--enable-mysqlnd --with-mysqli=mysqlnd --with-mysql-sock=/run/mysqld/mysqld.sock \
+		--with-openssl --enable-session --enable-sockets --enable-tokenizer \
+		--enable-xml --enable-xmlreader --enable-xmlwriter --with-libxml \
+		--with-zlib --with-external-pcre --enable-phar --enable-opcache \
+	&& make -j"$(nproc)" \
+	&& make install-cli install-fpm install-modules INSTALL_ROOT=/php-root \
+	&& strip /php-root/usr/bin/php83 /php-root/usr/sbin/php-fpm83 \
+	# Alpineのphp83パッケージは本番向けのphp.ini(display_errors=Off、log_errors=On、error_reporting
+	# にE_DEPRECATED・E_STRICTを含めない)を置いていた。ソースビルドは置かないので、PHPが同梱する本番向けの
+	# 雛形をそのまま使う。Zabbixに必要な値は conf.d/99-zabbix.ini が上書きする。
+	&& mkdir -p /php-root/etc/php83/conf.d /php-root/etc/php83/php-fpm.d \
+	&& cp php.ini-production /php-root/etc/php83/php.ini \
+	# OPcacheだけは共有ライブラリ(opcache.so)として作られ、読み込む設定が要る(Alpineは00_opcache.ini)。
+	&& echo "zend_extension=opcache" > /php-root/etc/php83/conf.d/00_opcache.ini
+
+# ---------------------------------------------------------------------------------------
+# 実行用イメージ
+# ---------------------------------------------------------------------------------------
 FROM alpine:${ALPINE_VERSION}
 
 ARG ZABBIX_SRC_DIR=sources/zabbix-6.0.48
@@ -24,30 +93,16 @@ ARG PHP_PKG=php83
 # hadolint ignore=DL3017
 RUN apk upgrade --no-cache
 
+# PHPが動的にリンクするライブラリ(ビルド側の *-dev に対応する実行時のパッケージ)。足りないものが
+# ないことは、tests/test_web_php.py と下のldd確認が見る。
 RUN apk add --no-cache \
 		font-ipa \
 		nginx \
-		${PHP_PKG} \
-		${PHP_PKG}-fpm \
-		${PHP_PKG}-opcache \
-		${PHP_PKG}-mbstring \
-		${PHP_PKG}-sockets \
-		${PHP_PKG}-bcmath \
-		${PHP_PKG}-gd \
-		${PHP_PKG}-xml \
-		${PHP_PKG}-xmlwriter \
-		${PHP_PKG}-xmlreader \
-		${PHP_PKG}-openssl \
-		${PHP_PKG}-ctype \
-		${PHP_PKG}-session \
-		${PHP_PKG}-gettext \
-		${PHP_PKG}-mysqli \
-		${PHP_PKG}-phar \
-		${PHP_PKG}-tokenizer \
-		${PHP_PKG}-fileinfo \
-		${PHP_PKG}-iconv \
-		${PHP_PKG}-dom \
+		libxml2 libssl3 libcrypto3 zlib pcre2 oniguruma gettext-libs \
+		libpng libjpeg-turbo freetype libwebp libgcc \
 		tzdata
+
+COPY --from=php-build /php-root/ /
 
 # UID/GID 1997: server/agent2/proxyと統一。apk add nginxが作成するnginxグループ(101)との
 # 衝突を避ける。
@@ -55,16 +110,15 @@ RUN addgroup -g 1997 -S zabbix \
 	&& adduser -D -S -H -u 1997 -G zabbix -s /sbin/nologin zabbix
 
 COPY docker/web/conf/nginx.conf /etc/nginx/nginx.conf
+COPY docker/web/conf/php-fpm.conf /etc/${PHP_PKG}/php-fpm.conf
+COPY docker/web/conf/php-fpm-www.conf /etc/${PHP_PKG}/php-fpm.d/www.conf
 COPY docker/web/conf/zabbix.ini /etc/${PHP_PKG}/conf.d/99-zabbix.ini
 
-# Alpineのphp-fpmパッケージのphp-fpm.confは既定で`;error_log = log/php83/error.log`と
-# コメントアウトされており、無指定時はコンパイル時既定の絶対パス(/var/log/php83/
-# error.log、root所有)が使われ、非rootのzabbixユーザーでは書き込めずFPM初期化そのものが
-# 失敗する(docker/web/conf/nginx.confのerror_log問題と同じクラスのバグ、実機テストで判明。
-# 実際のコメントアウト行の書式は`;error_log = log/php83/error.log`であり、素朴な
-# `^error_log = `一致では捕捉できない)。ここはまだroot権限がある(この後の`USER zabbix`
-# より前)ので、ビルド時にコメントを外してstderrへのリダイレクトへ書き換える。
-RUN sed -i 's#^;error_log = .*#error_log = /proc/self/fd/2#' /etc/${PHP_PKG}/php-fpm.conf
+# 実行時に必要な共有ライブラリが全部あること(足りなければ、ここでビルドを止める)。OPcacheは
+# phpの外の共有ライブラリ(opcache.so)で、lddの結果に出ないlibgcc_s.so.1も要るため、読み込めること
+# (php -m)まで確認する。
+RUN ! ldd /usr/bin/php83 /usr/sbin/php-fpm83 | grep -i "not found" \
+	&& php83 -m | grep -qx mysqli && php83 -m | grep -qx "Zend OPcache" && php-fpm83 -t
 
 # ui/conf/zabbix.conf.php はソースに存在しない(.exampleのみ) — entrypoint.shが
 # 環境変数からコンテナ起動時に生成するため、イメージには焼き込まない。
