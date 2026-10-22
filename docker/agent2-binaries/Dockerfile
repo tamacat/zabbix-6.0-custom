@@ -18,7 +18,7 @@ ARG ZABBIX_SRC_DIR=sources/zabbix-6.0.48
 
 # agent2のバイナリにはGo標準ライブラリがそのまま組み込まれる。docker/agent2/Dockerfile と同じ理由・
 # 同じ値で固定する(この2つが食い違っていないことは tests/test_agent2_binaries.py が確認する)。
-ARG GOTOOLCHAIN=go1.26.9
+ARG GOTOOLCHAIN=go1.26.10
 
 # Windows向けに静的ビルドする依存ライブラリ。取得したtarballは、ここに書いたSHA-256と一致しなければ
 # 使わない(取得元の差し替え・改ざんを検知する)。バージョンを上げるときは、上流の公開値

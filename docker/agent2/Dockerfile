@@ -24,7 +24,7 @@ RUN apk add --no-cache go build-base git autoconf automake libtool pcre-dev open
 # 修正版のツールチェーンを`go`が自動取得して(チェックサムDBで検証される)ビルドに使う。
 # 固定なので、Goの新しいパッチリリースが出たらここを上げる。agent2のSCAゲート(scan-go-vuln.sh、
 # govulncheck)が、古いままだと失敗して知らせる。Alpineの`go`が追いついたら、この指定は外してよい。
-ENV GOTOOLCHAIN=go1.26.9
+ENV GOTOOLCHAIN=go1.26.10
 
 WORKDIR /build
 COPY ${ZABBIX_SRC_DIR}/ /build/
