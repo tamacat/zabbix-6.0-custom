@@ -134,7 +134,14 @@ COPY --chown=zabbix:zabbix ${ZABBIX_SRC_DIR}/ui/ /usr/share/zabbix/
 # (回転して描く数字に使うZBX_FONT_NAMEはDejaVuSansのまま。)
 RUN ln -s /usr/share/fonts/ipafont/ipagp.ttf /usr/share/zabbix/assets/fonts/IPAPGothic.ttf
 
-RUN mkdir -p /usr/share/zabbix/conf /tmp/zabbix-nginx /tmp/nginx-client-body /tmp/nginx-proxy /tmp/nginx-fastcgi \
+# Zabbixのtarballでは空のディレクトリ(modules/、conf/certs/、local/配下)は、gitが空のディレクトリを
+# 保存しないので、gitから取り出したソース(CI)には無く、COPYでは持ち込めない。フロントエンドは
+# どれも前提にしている: 管理 → 一般 → モジュール →「ディレクトリのスキャン」はui/modules/を
+# DirectoryIteratorで走査し、無いと例外になる。local/はサイト固有のコントローラー・ビュー・設定の置き場所。
+RUN mkdir -p /usr/share/zabbix/conf /usr/share/zabbix/conf/certs /usr/share/zabbix/modules \
+		/usr/share/zabbix/local/conf /usr/share/zabbix/local/app/controllers \
+		/usr/share/zabbix/local/app/partials /usr/share/zabbix/local/app/views \
+	&& mkdir -p /tmp/zabbix-nginx /tmp/nginx-client-body /tmp/nginx-proxy /tmp/nginx-fastcgi \
 		/tmp/nginx-uwsgi /tmp/nginx-scgi \
 	&& chown -R zabbix:zabbix /usr/share/zabbix /tmp/zabbix-nginx /tmp/nginx-client-body /tmp/nginx-proxy \
 		/tmp/nginx-fastcgi /tmp/nginx-uwsgi /tmp/nginx-scgi \

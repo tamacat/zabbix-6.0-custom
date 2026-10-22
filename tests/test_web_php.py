@@ -194,3 +194,20 @@ def test_opcache_is_installed_and_loaded():
 def test_the_default_mysql_socket_matches_the_alpine_package():
     # With DB host "localhost" PHP connects through this socket; the Alpine package built it in.
     assert "--with-mysql-sock=/run/mysqld/mysqld.sock" in _configure_flags()
+
+
+def test_the_directories_git_does_not_keep_are_created_in_the_image():
+    # The Zabbix tarball ships these as empty directories, which git does not store, so a clean checkout
+    # (CI) lacks them. The frontend needs ui/modules: Administration -> General -> Modules -> "Scan
+    # directory" walks it with DirectoryIterator and throws when it is missing.
+    final = _final_stage()
+
+    for directory in (
+        "/usr/share/zabbix/modules",
+        "/usr/share/zabbix/conf/certs",
+        "/usr/share/zabbix/local/conf",
+        "/usr/share/zabbix/local/app/controllers",
+        "/usr/share/zabbix/local/app/partials",
+        "/usr/share/zabbix/local/app/views",
+    ):
+        assert directory in final, directory
