@@ -102,7 +102,11 @@ RUN apk add --no-cache \
 		libpng libjpeg-turbo freetype libwebp libgcc \
 		tzdata
 
-COPY --from=php-build /php-root/ /
+# /php-root全体(/ へ)ではなく /usr と /etc だけをコピーする。ビルド結果には /var/run が
+# ディレクトリとして含まれ、Alpineでは /var/run が /run へのシンボリックリンクなので、
+# BuildKit(Docker本体)は「ディレクトリでないものへコピーできない」と失敗する。
+COPY --from=php-build /php-root/usr/ /usr/
+COPY --from=php-build /php-root/etc/ /etc/
 
 # UID/GID 1997: server/agent2/proxyと統一。apk add nginxが作成するnginxグループ(101)との
 # 衝突を避ける。

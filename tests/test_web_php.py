@@ -132,7 +132,11 @@ def test_the_layout_matches_what_the_entrypoint_expects():
 def test_php_comes_from_the_source_build_not_from_alpine_packages():
     final = _final_stage()
 
-    assert "COPY --from=php-build /php-root/ /" in final
+    # Only /usr and /etc are copied: the build result also holds /var/run as a directory, and in Alpine
+    # /var/run is a symlink, which BuildKit refuses to copy a directory over ("cannot copy to non-directory").
+    assert "COPY --from=php-build /php-root/usr/ /usr/" in final
+    assert "COPY --from=php-build /php-root/etc/ /etc/" in final
+    assert "COPY --from=php-build /php-root/ /" not in final
     # The apk add list of the runtime image has no php83 packages (they would shadow the build).
     apk_add = re.findall(r"apk add --no-cache \\\n(.*?)\n\n", final, re.DOTALL)
     assert apk_add, "runtime apk add list not found"
