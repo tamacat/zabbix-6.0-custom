@@ -211,3 +211,12 @@ def test_the_directories_git_does_not_keep_are_created_in_the_image():
         "/usr/share/zabbix/local/app/views",
     ):
         assert directory in final, directory
+
+
+def test_session_upload_progress_is_disabled():
+    # CVE-2026-115560: PHP has no fixed release yet and recommends session.upload_progress.enabled=0.
+    # entrypoint.sh rewrites 99-zabbix.ini at every start, so the setting has to be in what it writes.
+    entrypoint = ENTRYPOINT.read_text(encoding="utf-8")
+    assert "session.upload_progress.enabled = 0" in entrypoint
+    ini = (ENTRYPOINT.parent / "conf" / "zabbix.ini").read_text(encoding="utf-8")
+    assert "session.upload_progress.enabled = 0" in ini

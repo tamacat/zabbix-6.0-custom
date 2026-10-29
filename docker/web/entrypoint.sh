@@ -94,7 +94,9 @@ memory_limit = ${ZBX_MEMORYLIMIT:-128M}
 post_max_size = ${ZBX_POSTMAXSIZE:-16M}
 upload_max_filesize = ${ZBX_UPLOADMAXFILESIZE:-2M}
 max_input_time = ${ZBX_MAXINPUTTIME:-300}
-date.timezone = ${TZ_NAME}"
+date.timezone = ${TZ_NAME}
+; CVE-2026-115560: no fixed PHP release yet; Zabbix does not use session upload progress.
+session.upload_progress.enabled = 0"
 if [ -n "${ZBX_SESSION_NAME:-}" ]; then
 	INI_LINES="${INI_LINES}
 session.name = ${ZBX_SESSION_NAME}"
