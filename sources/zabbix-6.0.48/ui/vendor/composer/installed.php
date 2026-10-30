@@ -47,9 +47,9 @@
             'dev_requirement' => false,
         ),
         'symfony/yaml' => array(
-            'pretty_version' => 'v5.4.52',
-            'version' => '5.4.52.0',
-            'reference' => 'b0b27055f055f0d314c5c68ed0c10f0bbd90aee0',
+            'pretty_version' => 'v5.4.54',
+            'version' => '5.4.54.0',
+            'reference' => 'f27a7131106e8cb792d434e8faea7f3ffb615263',
             'type' => 'library',
             'install_path' => __DIR__ . '/../symfony/yaml',
             'aliases' => array(),
