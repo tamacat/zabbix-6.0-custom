@@ -35,6 +35,38 @@ this convention.
   **test-after** — implement first, then write and run the test.
 - Python tooling layer: `python3 -m pytest tests -q`
 - Shell script layer: `bats tests/scripts` (requires bats-core)
+- Web admin UI regression: `./scripts/ui-test.sh` (see below)
+
+### Web admin UI regression tests (`tests/ui/`)
+
+The static tests (`tests/test_web_php.py`, `tests/test_ui_vendor.py`) read the
+build definition; they cannot tell whether the finished `zabbix-web` image
+still *works*. A library or PHP bump can pass SCA and every static check and
+still break one screen (the `symfony/yaml` bump that broke YAML export was
+exactly that). `tests/ui/` closes that gap by driving a running stack over
+HTTP — no browser — and covers what this project changes: the source-built
+PHP (gd, gettext, xml, sockets, mysqli), the vendored libraries, nginx, the
+config `entrypoint.sh` generates from environment variables, and the graph
+font.
+
+```bash
+./scripts/ui-test.sh                 # build, start an isolated stack, test, tear down
+./scripts/ui-test.sh --no-build      # use already-built images (ZABBIX_IMAGE_TAG)
+./scripts/ui-test.sh --keep          # leave the stack up to look at it by hand
+./scripts/ui-test.sh -- -k export    # arguments after -- go to pytest
+```
+
+The stack runs under its own compose project name (`zbx6ui`) with its own
+container names and ports (`UI_TEST_WEB_PORT`, default 18080), so it does not
+collide with another Zabbix stack on the same machine. Without `ZABBIX_URL`
+the tests are skipped, so a plain `python3 -m pytest tests` still passes
+without a stack. To point the suite at a stack you started yourself, set
+`ZABBIX_URL` (and `ZABBIX_ADMIN_USER` / `ZABBIX_ADMIN_PASSWORD` if the
+defaults were changed); test data is created through the API under the
+`zbx6ui-` prefix and removed afterwards.
+
+When a fix for a UI-visible regression is made, add its test here with a
+docstring that says what broke and why SCA/static checks could not see it.
 
 Every triaged vulnerability must have at least one regression test or
 scanner detect-then-resolve check, executed in CI — a numeric coverage

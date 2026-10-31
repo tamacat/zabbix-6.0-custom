@@ -1,0 +1,14 @@
+# tests/ui/ 用の隔離スタック。scripts/ui-test.sh が compose.yml に重ねて使う。
+#
+# compose.yml は container_name を固定しているため、同じマシンで別のZabbixスタック(別バージョンの
+# カスタムビルドや、compat-test.sh が起動したスタック)が動いていると名前が衝突する。ここでは
+# コンテナ名だけを上書きして、プロジェクト名(COMPOSE_PROJECT_NAME)と合わせて完全に独立させる。
+# ポートは compose.yml が環境変数(ZABBIX_WEB_PORT / DEV_MYSQL_PORT)で決めているので、
+# scripts/ui-test.sh が空いている値を渡す。
+services:
+  zabbix-server:
+    container_name: zbx6ui-server
+  zabbix-web:
+    container_name: zbx6ui-web
+  dev-mysql:
+    container_name: zbx6ui-mysql

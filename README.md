@@ -90,6 +90,8 @@ cp .env.example .env   # fill in DB_SERVER_HOST / MYSQL_PASSWORD / etc.
 # Tests (do not require the Zabbix source to be present)
 python3 -m pytest tests -q        # release_tools/ unit tests
 bats tests/scripts                # scripts/ tests (requires bats-core)
+./scripts/ui-test.sh              # Web admin UI regression tests against a built stack
+                                  # (builds + starts an isolated stack; see docs/CONTRIBUTING.md)
 
 # VulnerabilityRegistry CLI
 python3 -m release_tools.cli register-cve --cve-id CVE-2026-00001 \
