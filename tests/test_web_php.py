@@ -18,8 +18,11 @@ ENTRYPOINT = REPO_ROOT / "docker" / "web" / "entrypoint.sh"
 FPM_CONF = REPO_ROOT / "docker" / "web" / "conf" / "php-fpm.conf"
 FPM_POOL = REPO_ROOT / "docker" / "web" / "conf" / "php-fpm-www.conf"
 
-# Alpineのphp83パッケージ(8.3.33)で有効だった拡張(php -m)。ソースビルドでもこの集合に揃える。
+# Alpineのphp83パッケージ(8.3.33)で有効だった拡張(php -m)に、simplexmlを足した集合。ソースビルドでもこれに揃える。
+# simplexml はAlpineのphp83パッケージには無かったが、構成のXMLインポート(CXmlImportReader)が
+# simplexml_load_string() を呼ぶので要る。
 EXPECTED_MODULES = {
+    "simplexml": "--enable-simplexml",
     "bcmath": "--enable-bcmath",
     "ctype": "--enable-ctype",
     "dom": "--enable-dom",
@@ -47,7 +50,7 @@ EXPECTED_MODULES = {
 # Zabbixが使わず、含めると攻撃面と依存ライブラリが増えるだけの拡張。
 UNWANTED_FLAGS = [
     "--with-curl", "--enable-ftp", "--with-sodium", "--with-sqlite3", "--with-pdo", "--enable-pdo",
-    "--enable-posix", "--enable-simplexml", "--enable-soap", "--enable-intl", "--with-ldap", "--with-zip",
+    "--enable-posix", "--enable-soap", "--enable-intl", "--with-ldap", "--with-zip",
     "--with-gmp", "--enable-pcntl", "--enable-exif", "--with-bz2",
 ]
 

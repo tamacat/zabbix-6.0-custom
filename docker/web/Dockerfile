@@ -48,8 +48,11 @@ RUN curl -fsSL -o php.tar.xz "https://www.php.net/distributions/php-${PHP_VERSIO
 
 # --disable-all から、Zabbixが必要とする拡張だけを足す。これまで使っていたAlpineのphp83パッケージと
 # 同じ集合(bcmath ctype dom fileinfo filter gd gettext iconv mbstring mysqli mysqlnd openssl session
-# sockets tokenizer xml xmlreader xmlwriter zlib、加えてphar・opcache)で、curl・ftp・sodium・
-# sqlite3などZabbixが使わない拡張は含めない。拡張は共有ライブラリではなくPHP本体に組み込む。
+# sockets tokenizer xml xmlreader xmlwriter zlib、加えてphar・opcache)に、simplexmlを足したもの。
+# simplexmlは構成のXMLインポート(ui/include/classes/import/readers/CXmlImportReader.php が
+# simplexml_load_string() を呼ぶ)に要り、無いとXMLのインポートが「Call to undefined function」で落ちる
+# (tests/ui/test_export_import.py)。curl・ftp・sodium・sqlite3などZabbixが使わない拡張は含めない。
+# 拡張は共有ライブラリではなくPHP本体に組み込む。
 # 配置はAlpineのパッケージに合わせ(/etc/php83、php83・php-fpm83)、entrypoint.shを変えずに済むようにしている。
 RUN ./configure \
 		--prefix=/usr \
@@ -65,7 +68,7 @@ RUN ./configure \
 		--with-gettext --with-iconv --enable-mbstring \
 		--enable-mysqlnd --with-mysqli=mysqlnd --with-mysql-sock=/run/mysqld/mysqld.sock \
 		--with-openssl --enable-session --enable-sockets --enable-tokenizer \
-		--enable-xml --enable-xmlreader --enable-xmlwriter --with-libxml \
+		--enable-xml --enable-xmlreader --enable-xmlwriter --enable-simplexml --with-libxml \
 		--with-zlib --with-external-pcre --enable-phar --enable-opcache \
 	&& make -j"$(nproc)" \
 	&& make install-cli install-fpm install-modules INSTALL_ROOT=/php-root \
