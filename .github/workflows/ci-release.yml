@@ -3,6 +3,14 @@
 # 以降を通しで再実行する。
 name: CI / Release
 
+# Actionsの一覧で、定期実行と手動実行が見分けられるようにする(どれも既定では「CI / Release」になる)。
+# push・pull_requestは空にして、GitHubの既定の表示(コミットメッセージの1行目・PRのタイトル)に任せる。
+# (head_commit.message をそのまま使うと、複数行のコミットメッセージが一覧に全文出てしまう。)
+run-name: >-
+  ${{ github.event_name == 'schedule' && '定期の再ビルド・再スキャン(週次)'
+  || github.event_name == 'workflow_dispatch' && '手動の再ビルド・再スキャン'
+  || '' }}
+
 on:
   push:
     branches: [main]
@@ -58,6 +66,20 @@ jobs:
       - name: Compare the pinned PHP version with the latest release
         run: ./scripts/check-php-version.sh
 
+  zabbix-version:
+    # 公式イメージの更新を待たずに上流のZabbixへ追従するための目印。Trivyはソースから作った
+    # Zabbix本体の脆弱性を判定できないので、取り込み済み(.env.example の ZABBIX_VERSION)より
+    # 新しい6.0.xの正式リリースが上流にあれば失敗して知らせる。php-version と同じ理由で定期実行のみ。
+    # 取り込みを忘れていても publish は止めない(verify のスキャンとは独立した、お知らせ用のジョブ)。
+    name: Zabbix upstream version check (scheduled)
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Compare the imported Zabbix version with the upstream tags
+        run: ./scripts/check-zabbix-version.sh
+
   verify:
     # BuildPipeline → ScanRunner(SCA) → ScanRunner(SAST) →
     # SecretScanner(CI、Git差分+イメージレイヤー) → SBOM生成 →
@@ -66,6 +88,9 @@ jobs:
     # (pytest/bats)もここで再実行する。
     name: Verify (tests, build, scan, compat-test)
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read # 前回のSBOMを取得して、前回ビルドとの差分をJob Summaryに出すため
     services:
       # compat-test.sh のdocker compose起動先。実運用のMySQL(本番DB)ではなく、
       # CI専用の使い捨てインスタンス — 環境変数の配線・起動可否のみを検証する
@@ -140,6 +165,11 @@ jobs:
         id: vars
         run: echo "build_date=$(date -u +%Y%m%d)" >> "$GITHUB_OUTPUT"
 
+      # スキャン・各ゲートの結果の記録先(Job Summary用)。scripts/*.sh が追記し、最後の
+      # 「Write Job Summary」が読む。表示専用で、ゲートの判定には影響しない。
+      - name: Prepare the Job Summary records
+        run: echo "SCAN_SUMMARY_FILE=${RUNNER_TEMP}/ci-summary.jsonl" >> "$GITHUB_ENV"
+
       - name: Run CI verification pipeline (stages 3-9)
         env:
           BUILD_DATE: ${{ steps.vars.outputs.build_date }}
@@ -160,6 +190,46 @@ jobs:
           name: sbom-${{ steps.vars.outputs.build_date }}
           path: sbom/
           if-no-files-found: ignore
+
+      # 前回ビルドからの変更を出すため、main の直近のSBOM(この実行より前のもの)を取ってくる。
+      # 見つからない・取れない場合は、比較なしで続ける(Job Summaryが「比較できません」と出す)。
+      - name: Fetch the previous SBOM (for the Job Summary)
+        if: always()
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p "${RUNNER_TEMP}/sbom-prev"
+          artifact_id="$(gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts?per_page=100" --jq '
+            [.artifacts[]
+              | select(.name | startswith("sbom-"))
+              | select(.expired | not)
+              | select(.workflow_run.head_branch == "main")
+              | select((.workflow_run.id | tostring) != "'"${GITHUB_RUN_ID}"'")]
+            | sort_by(.created_at) | last | .id // empty')"
+          if [ -z "${artifact_id}" ]; then
+            echo "前回のSBOMが見つかりません(初回、または保存期間切れ)"
+            exit 0
+          fi
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${artifact_id}/zip" > "${RUNNER_TEMP}/sbom-prev.zip"
+          unzip -q -o "${RUNNER_TEMP}/sbom-prev.zip" -d "${RUNNER_TEMP}/sbom-prev"
+          echo "前回のSBOM(artifact ${artifact_id}):"
+          ls "${RUNNER_TEMP}/sbom-prev"
+
+      # 「前回から何が変わったか」「脆弱性チェックはどこまで通ったか」を、Runの画面にまとめる。
+      - name: Write Job Summary
+        if: always()
+        continue-on-error: true
+        run: |
+          python3 -m release_tools.cli ci-summary \
+            --records "${SCAN_SUMMARY_FILE}" \
+            --sbom-dir sbom \
+            --prev-sbom-dir "${RUNNER_TEMP}/sbom-prev" \
+            --zabbix-version "${ZABBIX_VERSION}" \
+            --alpine-version "${ALPINE_VERSION}" \
+            --event "${{ github.event_name }}" \
+            --build-date "${{ steps.vars.outputs.build_date }}" \
+            --trivy-db >> "${GITHUB_STEP_SUMMARY}"
 
   publish:
     # セルフレビュー承認ゲート(BR3.2)→ 公開 → cosign keyless署名 → SBOM添付。
@@ -215,6 +285,10 @@ jobs:
           BUILD_DATE: ${{ needs.verify.outputs.build_date }}
         run: |
           set -euo pipefail
+          {
+            echo "## 公開したイメージ"
+            echo ""
+          } >> "${GITHUB_STEP_SUMMARY}"
           for component in zabbix-server zabbix-web zabbix-agent2 zabbix-proxy; do
             tag="$(python3 -m release_tools.cli generate-tag \
               --component "${component}" --zabbix-version "${ZABBIX_VERSION}" \
@@ -223,4 +297,5 @@ jobs:
             ./scripts/push-images.sh --tag "${tag}" \
               --sca Pass --sast Pass --compat Pass --secret Clean \
               --sbom "${sbom_file}" --yes
+            echo "- \`${tag}\`" >> "${GITHUB_STEP_SUMMARY}"
           done

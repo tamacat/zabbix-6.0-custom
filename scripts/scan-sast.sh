@@ -111,6 +111,12 @@ if [ "${UPDATE_BASELINE}" -eq 0 ]; then
 	done
 fi
 
+# Job Summary用の記録(CIが SCAN_SUMMARY_FILE を渡したときだけ)。表示専用で、判定には影響しない。
+SUMMARY_ARGS=()
+if [ -n "${SCAN_SUMMARY_FILE:-}" ]; then
+	SUMMARY_ARGS=(--summary-file "${SCAN_SUMMARY_FILE}" --label "範囲: ${SAST_SCOPE}")
+fi
+
 SEMGREP_OUTPUT="$(mktemp)"
 CPPCHECK_OUTPUT="$(mktemp)"
 PATCHED_LIST="$(mktemp)"
@@ -193,6 +199,7 @@ else
 		--source-root "${SOURCE_DIR}" \
 		${STALE_ARGS[@]+"${STALE_ARGS[@]}"} \
 		--registry "${REGISTRY_PATH}" \
+		${SUMMARY_ARGS[@]+"${SUMMARY_ARGS[@]}"} \
 		|| SEMGREP_STATUS=$?
 	if [ "${SEMGREP_STATUS}" -eq 0 ]; then
 		echo "Semgrep verdict: Pass"
@@ -248,6 +255,7 @@ CPPCHECK_STATUS=0
 	--source-root "${SOURCE_DIR}" \
 	${STALE_ARGS[@]+"${STALE_ARGS[@]}"} \
 	--registry "${REGISTRY_PATH}" \
+	${SUMMARY_ARGS[@]+"${SUMMARY_ARGS[@]}"} \
 	|| CPPCHECK_STATUS=$?
 if [ "${CPPCHECK_STATUS}" -eq 0 ]; then
 	echo "cppcheck verdict: Pass"

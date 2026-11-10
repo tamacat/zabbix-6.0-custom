@@ -59,11 +59,18 @@ trivy image --format json --output "${TRIVY_OUTPUT}" "$@" "${IMAGE_REF}" \
 	|| fail "trivy image の実行に失敗しました(${IMAGE_REF})"
 
 echo "---- ScanRunner ゲート判定(BR2.1) ----"
+# Job Summary用の記録(CIが SCAN_SUMMARY_FILE を渡したときだけ)。表示専用で、判定には影響しない。
+SUMMARY_ARGS=()
+if [ -n "${SCAN_SUMMARY_FILE:-}" ]; then
+	SUMMARY_ARGS=(--summary-file "${SCAN_SUMMARY_FILE}" --label "${IMAGE_REF}")
+fi
+
 VERDICT_STATUS=0
 "${PY}" -m release_tools.cli scan-gate \
 	--tool trivy \
 	--input "${TRIVY_OUTPUT}" \
 	--registry "${REGISTRY_PATH}" \
+	${SUMMARY_ARGS[@]+"${SUMMARY_ARGS[@]}"} \
 	|| VERDICT_STATUS=$?
 
 if [ "${VERDICT_STATUS}" -eq 0 ]; then

@@ -34,6 +34,14 @@ fail() {
 	exit 1
 }
 
+# Job Summary用の記録(CIが SCAN_SUMMARY_FILE を渡したときだけ)。表示専用で、ゲートの判定には影響しない。
+# 引数: 項目名 結果(Pass・Fail・Clean・Blocked)
+record_step() {
+	if [ -n "${SCAN_SUMMARY_FILE:-}" ]; then
+		printf '{"kind": "step", "name": "%s", "result": "%s"}\n' "$1" "$2" >> "${SCAN_SUMMARY_FILE}" || true
+	fi
+}
+
 # `python3` という名前がPATH上に存在していても実際に動作するインタプリタとは限らない
 # (build-images.sh等と同じ判定方式)。
 if python3 -c "import sys" >/dev/null 2>&1; then
@@ -107,7 +115,12 @@ echo ""
 echo "=================================================================="
 echo "Step 6/9: SecretScanner(CI) — Git差分・履歴 + イメージレイヤー(${#TAGS[@]}件)"
 echo "=================================================================="
-./scripts/scan-secrets.sh "${TAGS[@]}" || fail "シークレットスキャンでBlocked判定が出ました(上記ログ参照)"
+if ./scripts/scan-secrets.sh "${TAGS[@]}"; then
+	record_step "シークレットスキャン" Clean
+else
+	record_step "シークレットスキャン" Blocked
+	fail "シークレットスキャンでBlocked判定が出ました(上記ログ参照)"
+fi
 
 echo ""
 echo "=================================================================="
@@ -125,7 +138,12 @@ echo ""
 echo "=================================================================="
 echo "Step 8/9: CompatibilityTestRunner"
 echo "=================================================================="
-./scripts/compat-test.sh || fail "互換性テストに失敗しました"
+if ./scripts/compat-test.sh; then
+	record_step "互換性テスト" Pass
+else
+	record_step "互換性テスト" Fail
+	fail "互換性テストに失敗しました"
+fi
 
 echo ""
 echo "=================================================================="
@@ -133,8 +151,10 @@ echo "Step 9/9: 公開前提条件ゲート判定(BR3.1)"
 echo "=================================================================="
 if ! "${PY}" -m release_tools.cli publish-gate \
 	--sca Pass --sast Pass --compat Pass --secret Clean; then
+	record_step "公開前提条件" Fail
 	fail "BR3.1: 公開前提条件を満たしていません(このスクリプト内の各ゲートはすべてPassしているはずのため、到達した場合はロジックの不整合を疑ってください)"
 fi
+record_step "公開前提条件" Pass
 
 echo ""
 echo "=================================================================="

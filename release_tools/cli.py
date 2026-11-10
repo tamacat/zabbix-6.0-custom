@@ -19,6 +19,7 @@ from datetime import date
 from pathlib import Path
 from typing import Optional
 
+from . import ci_summary as ci_summary_mod
 from . import gate as gate_mod
 from .archivefile import ArchiveFileError, extract_archive_file
 from .imagefile import ImageFileError, extract_image_file
@@ -147,6 +148,7 @@ def cmd_scan_gate(args: argparse.Namespace) -> int:
     except (json.JSONDecodeError, ValueError, ET.ParseError) as exc:
         print(f"scan-gate失敗: 入力の解析に失敗しました: {exc}", file=sys.stderr)
         return 1
+    all_findings = findings  # baseline適用前の全件(サマリー用)
 
     if args.baseline:
         if args.tool in ("trivy", "govulncheck"):
@@ -169,6 +171,17 @@ def cmd_scan_gate(args: argparse.Namespace) -> int:
     blocking = gate_mod.unwaived_findings(findings, registry, today=today)
     registry.save()  # BR2.2/BR2.3によるwaiver/vulnerability状態の変化を永続化する
     verdict = "Fail" if blocking else "Pass"
+    if args.summary_file:
+        # 表示専用の記録。書けなくてもゲートの判定は変えない。
+        try:
+            ci_summary_mod.append_record(
+                args.summary_file,
+                ci_summary_mod.build_scan_record(
+                    args.tool, args.label or args.input, verdict, all_findings, findings, blocking
+                ),
+            )
+        except OSError as exc:
+            print(f"[warn] サマリーの記録に失敗しました(判定には影響しません): {exc}", file=sys.stderr)
     if blocking:
         label = "baseline外の新規指摘" if args.baseline else "ゲート対象の指摘"
         print(f"{label}: {len(blocking)}件", file=sys.stderr)
@@ -211,6 +224,19 @@ def cmd_extract_archive_file(args: argparse.Namespace) -> int:
         return 1
     print(f"{args.path}: {size}バイトを {args.output} へ取り出しました")
     return 0
+
+
+def cmd_ci_summary(args: argparse.Namespace) -> int:
+    """CIの結果と前回とのSBOM差分をMarkdownで標準出力へ出す(GitHub Actionsでは $GITHUB_STEP_SUMMARY へ追記する)。"""
+    meta = {
+        "zabbix_version": args.zabbix_version or "",
+        "alpine_version": args.alpine_version or "",
+        "event": args.event or "",
+        "build_date": args.build_date or "",
+    }
+    return ci_summary_mod.main_render(
+        args.records, args.sbom_dir, args.prev_sbom_dir, meta, query_trivy_db=args.trivy_db
+    )
 
 
 def cmd_publish_gate(args: argparse.Namespace) -> int:
@@ -301,6 +327,12 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p.add_argument("--today", default=None, help="YYYY-MM-DD(テスト・再現用、既定は本日)")
     p.add_argument("--registry", default=DEFAULT_REGISTRY_PATH)
+    p.add_argument(
+        "--summary-file",
+        default=None,
+        help="Job Summary用: 判定の内訳(件数・waiver・baseline)を1行のJSONとして追記するファイル。判定には影響しない",
+    )
+    p.add_argument("--label", default=None, help="--summary-file に残す対象の名前(イメージ名・スキャン範囲など)")
     p.set_defaults(func=cmd_scan_gate)
 
     p = sub.add_parser("sast-baseline", help="SASTスキャン結果から既知の指摘のbaselineを書き出す(要:人によるトリアージ)")
@@ -322,6 +354,17 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--path", required=True, help="アーカイブ内のパス")
     p.add_argument("--output", required=True, help="取り出し先のファイル")
     p.set_defaults(func=cmd_extract_archive_file)
+
+    p = sub.add_parser("ci-summary", help="CIの結果と前回ビルドからの変更をMarkdownにまとめる(表示専用、常にexit 0)")
+    p.add_argument("--records", default=None, help="scan-gate --summary-file と ci-pipeline.sh が書いた記録ファイル")
+    p.add_argument("--sbom-dir", default=None, help="今回のSBOMのディレクトリ")
+    p.add_argument("--prev-sbom-dir", default=None, help="前回のSBOMのディレクトリ(無ければ比較しない)")
+    p.add_argument("--zabbix-version", default=None)
+    p.add_argument("--alpine-version", default=None)
+    p.add_argument("--event", default=None, help="実行のきっかけ(schedule・push など)")
+    p.add_argument("--build-date", default=None)
+    p.add_argument("--trivy-db", action="store_true", help="trivy が使えれば、脆弱性DBの更新時刻も載せる")
+    p.set_defaults(func=cmd_ci_summary)
 
     p = sub.add_parser("publish-gate", help="BR3.1の4条件を判定する")
     p.add_argument("--sca", required=True, choices=("Pass", "Fail"))

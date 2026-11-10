@@ -363,6 +363,23 @@ optional. The release gate always checks against the current CVE database
 at gate-evaluation time rather than relying on scan results from whenever
 the image was originally built.
 
+### Reading a CI run: what changed, and how far the checks got
+
+Every run of `ci-release.yml` writes a **Job Summary** on its run page (Actions, then the run, then *Summary*), so
+the logs do not have to be opened:
+
+- **What changed since the previous build.** This run's SBOMs are compared with the previous run's on `main`:
+  package updates, additions and removals per image, and the Alpine point release.
+- **How far the vulnerability checks got.** Trivy counts per image and severity, how many findings a waiver
+  covers (and which CVEs), govulncheck on agent2, SAST findings above the baseline, the secret scan, the
+  compatibility test and the publish gate. The Trivy vulnerability DB timestamp shows how fresh the data was.
+- **Upstream.** The weekly `zabbix-version` job fails when upstream has a newer 6.0.x release than the one
+  imported (`ZABBIX_VERSION` in `.env.example`, checked by `scripts/check-zabbix-version.sh`), and `php-version` does the same for PHP; each also adds a one-row table to the Summary. They
+  only notify: they do not block `verify` or `publish`.
+
+A scheduled run stays *waiting* until the `production` environment is approved. By then `verify` (every check
+above) has already finished; nothing is published until you approve.
+
 ### PHP in `zabbix-web` is built from source
 
 The `zabbix-web` image does not use Alpine's `php83` packages: PHP is compiled
