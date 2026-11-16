@@ -196,8 +196,8 @@ AllowRoot=1"
 	[ ! -f "${TEST_TMPDIR}/started.log" ]
 }
 
-@test "このスクリプトが出力するパラメータは、すべて6.0.48のzabbix_serverが受け付ける名前である" {
-	local server_c="${REPO_ROOT}/sources/zabbix-6.0.48/src/zabbix_server/server.c"
+@test "このスクリプトが出力するパラメータは、すべて6.0.49のzabbix_serverが受け付ける名前である" {
+	local server_c="${REPO_ROOT}/sources/zabbix-6.0.49/src/zabbix_server/server.c"
 	[ -f "${server_c}" ]
 	local accepted emitted unknown
 	accepted="$(grep -oE '^\s*\{"[A-Za-z0-9]+",\s*&' "${server_c}" | grep -oE '"[A-Za-z0-9]+"' | tr -d '"' | sort -u)"
@@ -207,7 +207,7 @@ AllowRoot=1"
 	              sed -n '/^TLS_FILES="/,/^"$/p' "${REPO_ROOT}/docker/server/entrypoint.sh" | grep -oE '^TLS[A-Za-z]+File'; \
 	              printf '%s\n' DBHost DBPort DBName DBUser DBPassword LogType PidFile SocketDir AlertScriptsPath ExternalScripts ExportDir LoadModule LoadModulePath HANodeName NodeAddress; } | sort -u)"
 	unknown="$(comm -23 <(printf '%s\n' "${emitted}") <(printf '%s\n' "${accepted}"))"
-	[ -z "${unknown}" ] || { echo "6.0.48が受け付けないパラメータ: ${unknown}" >&2; return 1; }
+	[ -z "${unknown}" ] || { echo "6.0.49が受け付けないパラメータ: ${unknown}" >&2; return 1; }
 	[ "$(printf '%s\n' "${emitted}" | wc -l)" -gt 60 ]
 }
 

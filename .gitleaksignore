@@ -1,7 +1,8 @@
 # gitleaks: findings triaged as false positives (one exact fingerprint per line).
 #
-# Every entry below is in the unmodified upstream Zabbix 6.0.48 import (the commit named
-# in data/upstream-import-ref); none is in code this project wrote. A fingerprint is
+# Every entry below is in the unmodified upstream Zabbix 6.0.48 import (commit 1f485e8, which is
+# still in the git history; data/upstream-import-ref now names the 6.0.49 import, whose diff
+# is mostly renames and has no findings of its own); none is in code this project wrote. A fingerprint is
 # <commit>:<file>:<rule>:<line>, so it silences that one finding only: a real secret added
 # to the same file later, or to any other file, is still reported.
 #

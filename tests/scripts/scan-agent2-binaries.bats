@@ -10,7 +10,7 @@ setup() {
 	TEST_TMPDIR="$(mktemp -d)"
 	STUB_BIN="${TEST_TMPDIR}/bin"
 	DIST="${TEST_TMPDIR}/dist"
-	PREFIX="zabbix_agent2-6.0.48-b20261017"
+	PREFIX="zabbix_agent2-6.0.49-b20261017"
 	mkdir -p "${STUB_BIN}" "${DIST}"
 	# CI installs tools to /usr/local/bin; see tests/scripts/build-images.bats for why that is excluded here.
 	export PATH="${STUB_BIN}:$(echo "${PATH}" | sed -e 's#:/usr/local/bin:#:#g' -e 's#^/usr/local/bin:##' -e 's#:/usr/local/bin$##')"

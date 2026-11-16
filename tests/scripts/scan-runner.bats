@@ -95,7 +95,7 @@ EOF
 	# ただスタブを置かないだけでは「不在」にならない(開発機にscoop等で実物のtrivyが
 	# 入っていることがある)。semgrepのテストと同じくhide_toolでPATHから確実に外す。
 	hide_tool trivy
-	run bash scripts/scan-sca.sh tamacat/zabbix-server-mysql:6.0.48-alpine-b20260920
+	run bash scripts/scan-sca.sh tamacat/zabbix-server-mysql:6.0.49-alpine-b20260920
 	[ "$status" -ne 0 ]
 	[[ "$output" == *"trivy"* ]]
 }
@@ -104,7 +104,7 @@ EOF
 	cd "${REPO_ROOT}"
 	stub_docker_image_missing
 	stub_trivy_empty_results
-	run bash scripts/scan-sca.sh tamacat/zabbix-server-mysql:6.0.48-alpine-b20260920
+	run bash scripts/scan-sca.sh tamacat/zabbix-server-mysql:6.0.49-alpine-b20260920
 	[ "$status" -ne 0 ]
 	[[ "$output" == *"見つかりません"* ]]
 }
@@ -113,7 +113,7 @@ EOF
 	cd "${REPO_ROOT}"
 	stub_docker_image_exists
 	stub_trivy_empty_results
-	run bash scripts/scan-sca.sh tamacat/zabbix-server-mysql:6.0.48-alpine-b20260920
+	run bash scripts/scan-sca.sh tamacat/zabbix-server-mysql:6.0.49-alpine-b20260920
 	[ "$status" -eq 0 ]
 	[[ "$output" == *"SCA verdict: Pass"* ]]
 }
@@ -203,7 +203,7 @@ EOF
 make_sast_repo() {
 	# scan-sast.sh+release_toolsだけを持つ隔離gitリポジトリ。初回コミットを上流インポートとみなす。
 	SAST_REPO="${TEST_TMPDIR}/repo"
-	local src="${SAST_REPO}/sources/zabbix-6.0.48"
+	local src="${SAST_REPO}/sources/zabbix-6.0.49"
 	mkdir -p "${SAST_REPO}/scripts" "${src}/src/libs" "${src}/src/go/vendor/x" "${src}/ui/js/vendors"
 	cp "${REPO_ROOT}/scripts/scan-sast.sh" "${SAST_REPO}/scripts/"
 	cp -r "${REPO_ROOT}/release_tools" "${SAST_REPO}/"
@@ -221,7 +221,7 @@ make_sast_repo() {
 	git -C "${SAST_REPO}" rev-parse HEAD > "${SAST_REPO}/data/upstream-import-ref"
 }
 
-CPPCHECK_FINDING_XML='<results version="2"><errors><error id="nullPointer" severity="warning" msg="Null pointer dereference: p"><location file="sources/zabbix-6.0.48/src/libs/a.c" line="3"/></error></errors></results>'
+CPPCHECK_FINDING_XML='<results version="2"><errors><error id="nullPointer" severity="warning" msg="Null pointer dereference: p"><location file="sources/zabbix-6.0.49/src/libs/a.c" line="3"/></error></errors></results>'
 
 @test "scan-sast.sh(patched): 変更ファイルがなければSemgrep/cppcheckをスキップしてPassする" {
 	make_sast_repo
@@ -238,20 +238,20 @@ CPPCHECK_FINDING_XML='<results version="2"><errors><error id="nullPointer" sever
 	make_sast_repo
 	stub_sast_tools
 	cd "${SAST_REPO}"
-	echo 'int a2;' >> sources/zabbix-6.0.48/src/libs/a.c
-	echo 'int v2;' >> sources/zabbix-6.0.48/src/go/vendor/x/v.c
-	echo '<?php echo 2;' >> sources/zabbix-6.0.48/ui/index.php
+	echo 'int a2;' >> sources/zabbix-6.0.49/src/libs/a.c
+	echo 'int v2;' >> sources/zabbix-6.0.49/src/go/vendor/x/v.c
+	echo '<?php echo 2;' >> sources/zabbix-6.0.49/ui/index.php
 	run bash scripts/scan-sast.sh
 	[ "$status" -eq 0 ]
-	grep -q "sources/zabbix-6.0.48/src/libs/a.c" "${TEST_TMPDIR}/cppcheck-calls.log"
+	grep -q "sources/zabbix-6.0.49/src/libs/a.c" "${TEST_TMPDIR}/cppcheck-calls.log"
 	run grep -qF "libs/b.c" "${TEST_TMPDIR}/cppcheck-calls.log"
 	[ "$status" -ne 0 ]
 	run grep -q "vendor" "${TEST_TMPDIR}/cppcheck-calls.log"
 	[ "$status" -ne 0 ]
 	# semgrepへは常に --exclude vendor/vendors が付くので「vendorという語が出ない」ことではなく、
 	# vendor配下のファイルが --include の対象になっていないことを確認する。
-	grep -q -- "--include sources/zabbix-6.0.48/ui/index.php" "${TEST_TMPDIR}/semgrep-calls.log"
-	run grep -q -- "--include sources/zabbix-6.0.48/src/go/vendor" "${TEST_TMPDIR}/semgrep-calls.log"
+	grep -q -- "--include sources/zabbix-6.0.49/ui/index.php" "${TEST_TMPDIR}/semgrep-calls.log"
+	run grep -q -- "--include sources/zabbix-6.0.49/src/go/vendor" "${TEST_TMPDIR}/semgrep-calls.log"
 	[ "$status" -ne 0 ]
 }
 
@@ -259,9 +259,9 @@ CPPCHECK_FINDING_XML='<results version="2"><errors><error id="nullPointer" sever
 	make_sast_repo
 	stub_sast_tools
 	cd "${SAST_REPO}"
-	mkdir -p sources/zabbix-6.0.48/ui/js/vendors
-	echo 'var x = 1;' > sources/zabbix-6.0.48/ui/js/vendors/lib.js
-	git add sources/zabbix-6.0.48/ui/js/vendors/lib.js
+	mkdir -p sources/zabbix-6.0.49/ui/js/vendors
+	echo 'var x = 1;' > sources/zabbix-6.0.49/ui/js/vendors/lib.js
+	git add sources/zabbix-6.0.49/ui/js/vendors/lib.js
 	run bash scripts/scan-sast.sh
 	[ "$status" -eq 0 ]
 	[[ "$output" == *"変更ファイル: 0件"* ]]
@@ -272,7 +272,7 @@ CPPCHECK_FINDING_XML='<results version="2"><errors><error id="nullPointer" sever
 	make_sast_repo
 	stub_sast_tools
 	cd "${SAST_REPO}"
-	echo 'int a2;' >> sources/zabbix-6.0.48/src/libs/a.c
+	echo 'int a2;' >> sources/zabbix-6.0.49/src/libs/a.c
 	run bash scripts/scan-sast.sh
 	[ "$status" -eq 0 ]
 	grep -q -- "--exclude vendor --exclude vendors" "${TEST_TMPDIR}/semgrep-calls.log"
@@ -282,7 +282,7 @@ CPPCHECK_FINDING_XML='<results version="2"><errors><error id="nullPointer" sever
 	make_sast_repo
 	stub_sast_tools
 	cd "${SAST_REPO}"
-	echo 'int a2;' >> sources/zabbix-6.0.48/src/libs/a.c
+	echo 'int a2;' >> sources/zabbix-6.0.49/src/libs/a.c
 	run env CPPCHECK_STUB_XML="${CPPCHECK_FINDING_XML}" bash scripts/scan-sast.sh
 	[ "$status" -ne 0 ]
 	[[ "$output" == *"cppcheck verdict: Fail"* ]]
@@ -298,7 +298,7 @@ CPPCHECK_FINDING_XML='<results version="2"><errors><error id="nullPointer" sever
 	[ "$status" -eq 0 ]
 	grep -q "nullPointer" data/sast-baseline/cppcheck.json
 
-	echo 'int a2;' >> sources/zabbix-6.0.48/src/libs/a.c
+	echo 'int a2;' >> sources/zabbix-6.0.49/src/libs/a.c
 	run env CPPCHECK_STUB_XML="${CPPCHECK_FINDING_XML}" bash scripts/scan-sast.sh
 	[ "$status" -eq 0 ]
 	[[ "$output" == *"cppcheck verdict: Pass"* ]]
@@ -310,7 +310,7 @@ CPPCHECK_FINDING_XML='<results version="2"><errors><error id="nullPointer" sever
 	cd "${SAST_REPO}"
 	run bash scripts/scan-sast.sh --scope full
 	[ "$status" -eq 0 ]
-	grep -q -- "-i sources/zabbix-6.0.48/src/go/vendor" "${TEST_TMPDIR}/cppcheck-calls.log"
+	grep -q -- "-i sources/zabbix-6.0.49/src/go/vendor" "${TEST_TMPDIR}/cppcheck-calls.log"
 }
 
 @test "scan-sast.sh(full): semgrepにも --exclude vendor/vendors が付く" {
@@ -405,7 +405,7 @@ GOVULN_CALLED_JSON='{"config": {"scanner_name": "govulncheck"}}
 	cd "${REPO_ROOT}"
 	stub_docker_save_with_binary
 	hide_tool govulncheck
-	run bash scripts/scan-go-vuln.sh tamacat/zabbix-agent2:6.0.48-alpine-b20261008
+	run bash scripts/scan-go-vuln.sh tamacat/zabbix-agent2:6.0.49-alpine-b20261008
 	[ "$status" -ne 0 ]
 	[[ "$output" == *"govulncheck が見つかりません"* ]]
 }
@@ -414,7 +414,7 @@ GOVULN_CALLED_JSON='{"config": {"scanner_name": "govulncheck"}}
 	cd "${REPO_ROOT}"
 	stub_docker_save_with_binary
 	stub_govulncheck "${GOVULN_CLEAN_JSON}"
-	run bash scripts/scan-go-vuln.sh tamacat/zabbix-agent2:6.0.48-alpine-b20261008
+	run bash scripts/scan-go-vuln.sh tamacat/zabbix-agent2:6.0.49-alpine-b20261008
 	[ "$status" -eq 0 ]
 	[[ "$output" == *"Go vulnerability verdict: Pass"* ]]
 	grep -q -- "-mode=binary -format json" "${TEST_TMPDIR}/govulncheck-calls.log"
@@ -424,7 +424,7 @@ GOVULN_CALLED_JSON='{"config": {"scanner_name": "govulncheck"}}
 	cd "${REPO_ROOT}"
 	stub_docker_save_with_binary
 	stub_govulncheck "${GOVULN_CALLED_JSON}"
-	run bash scripts/scan-go-vuln.sh tamacat/zabbix-agent2:6.0.48-alpine-b20261008
+	run bash scripts/scan-go-vuln.sh tamacat/zabbix-agent2:6.0.49-alpine-b20261008
 	[ "$status" -ne 0 ]
 	[[ "$output" == *"Go vulnerability verdict: Fail"* ]]
 	[[ "$output" == *"govulncheck|GO-2026-6603"* ]]
@@ -439,7 +439,7 @@ GOVULN_CALLED_JSON='{"config": {"scanner_name": "govulncheck"}}
 	expires="$(date -u -d '+30 days' +%Y-%m-%d 2>/dev/null || date -u -v+30d +%Y-%m-%d)"
 	python3 -m release_tools.cli register-cve --cve-id CVE-2026-78659 --component zabbix-agent2 --severity Medium --registry "${REGISTRY_PATH}" >/dev/null 2>&1 		|| python -m release_tools.cli register-cve --cve-id CVE-2026-78659 --component zabbix-agent2 --severity Medium --registry "${REGISTRY_PATH}" >/dev/null
 	python3 -m release_tools.cli waive --cve-id CVE-2026-78659 --waiver-id waiver-cve-2026-78659 --reason "修正版のGoが未提供" --issued-at "${today}" --expires-at "${expires}" --registry "${REGISTRY_PATH}" >/dev/null 2>&1 		|| python -m release_tools.cli waive --cve-id CVE-2026-78659 --waiver-id waiver-cve-2026-78659 --reason "修正版のGoが未提供" --issued-at "${today}" --expires-at "${expires}" --registry "${REGISTRY_PATH}" >/dev/null
-	run bash scripts/scan-go-vuln.sh tamacat/zabbix-agent2:6.0.48-alpine-b20261008
+	run bash scripts/scan-go-vuln.sh tamacat/zabbix-agent2:6.0.49-alpine-b20261008
 	[ "$status" -eq 0 ]
 	[[ "$output" == *"Go vulnerability verdict: Pass"* ]]
 }
@@ -448,7 +448,7 @@ GOVULN_CALLED_JSON='{"config": {"scanner_name": "govulncheck"}}
 	cd "${REPO_ROOT}"
 	stub_docker_save_with_binary
 	stub_govulncheck "" 2
-	run bash scripts/scan-go-vuln.sh tamacat/zabbix-agent2:6.0.48-alpine-b20261008
+	run bash scripts/scan-go-vuln.sh tamacat/zabbix-agent2:6.0.49-alpine-b20261008
 	[ "$status" -ne 0 ]
 	[[ "$output" == *"govulncheck の実行に失敗しました"* ]]
 	[[ "$output" != *"verdict: Pass"* ]]
@@ -458,7 +458,7 @@ GOVULN_CALLED_JSON='{"config": {"scanner_name": "govulncheck"}}
 	cd "${REPO_ROOT}"
 	stub_docker_save_with_binary
 	stub_govulncheck ""
-	run bash scripts/scan-go-vuln.sh tamacat/zabbix-agent2:6.0.48-alpine-b20261008
+	run bash scripts/scan-go-vuln.sh tamacat/zabbix-agent2:6.0.49-alpine-b20261008
 	[ "$status" -ne 0 ]
 	[[ "$output" != *"verdict: Pass"* ]]
 }
@@ -467,7 +467,7 @@ GOVULN_CALLED_JSON='{"config": {"scanner_name": "govulncheck"}}
 	cd "${REPO_ROOT}"
 	stub_docker_save_with_binary
 	stub_govulncheck "${GOVULN_CLEAN_JSON}"
-	run env STUB_NO_BINARY=1 bash scripts/scan-go-vuln.sh tamacat/zabbix-agent2:6.0.48-alpine-b20261008
+	run env STUB_NO_BINARY=1 bash scripts/scan-go-vuln.sh tamacat/zabbix-agent2:6.0.49-alpine-b20261008
 	[ "$status" -ne 0 ]
 	[[ "$output" == *"取り出せませんでした"* ]]
 	[ ! -f "${TEST_TMPDIR}/govulncheck-calls.log" ]

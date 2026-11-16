@@ -3,7 +3,7 @@
 # 維持する。
 #
 # 前提: docker/server/Dockerfile 冒頭のコメントと同じ — ${ZABBIX_SRC_DIR}(既定
-# sources/zabbix-6.0.48)にZabbix 6.0ソース(ui/ ディレクトリ)が配置されるまで
+# sources/zabbix-6.0.49)にZabbix 6.0ソース(ui/ ディレクトリ)が配置されるまで
 # `docker build` は実行できない。
 #
 # ビルドコンテキストはこのディレクトリ(zabbix-6.0-custom/)自身(compose.yml参照)。
@@ -86,7 +86,7 @@ RUN ./configure \
 # ---------------------------------------------------------------------------------------
 FROM alpine:${ALPINE_VERSION}
 
-ARG ZABBIX_SRC_DIR=sources/zabbix-6.0.48
+ARG ZABBIX_SRC_DIR=sources/zabbix-6.0.49
 ARG PHP_PKG=php83
 
 # ベースイメージ(alpine:${ALPINE_VERSION})は取得した時点のスナップショットで、その後にAlpineが

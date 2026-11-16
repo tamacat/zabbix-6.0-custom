@@ -206,9 +206,9 @@ EnableRemoteCommands=1"
 	[ ! -f "${TEST_TMPDIR}/started.log" ]
 }
 
-# 設定した項目を、実際の6.0.48のzabbix_proxyが受け付けるか(未知のパラメータがあると起動できない)。
-@test "このスクリプトが出力するパラメータは、すべて6.0.48のzabbix_proxyが受け付ける名前である" {
-	local proxy_c="${REPO_ROOT}/sources/zabbix-6.0.48/src/zabbix_proxy/proxy.c"
+# 設定した項目を、実際の6.0.49のzabbix_proxyが受け付けるか(未知のパラメータがあると起動できない)。
+@test "このスクリプトが出力するパラメータは、すべて6.0.49のzabbix_proxyが受け付ける名前である" {
+	local proxy_c="${REPO_ROOT}/sources/zabbix-6.0.49/src/zabbix_proxy/proxy.c"
 	[ -f "${proxy_c}" ]
 	local accepted emitted
 	accepted="$(grep -oE '^\s*\{"[A-Za-z0-9]+",\s*&' "${proxy_c}" | grep -oE '"[A-Za-z0-9]+"' | tr -d '"' | sort -u)"
@@ -219,7 +219,7 @@ EnableRemoteCommands=1"
 	              printf '%s\n' ProxyMode Server Hostname HostnameItem DBName LoadModule LoadModulePath LogType PidFile SocketDir ExternalScripts; } | sort -u)"
 	local unknown
 	unknown="$(comm -23 <(printf '%s\n' "${emitted}") <(printf '%s\n' "${accepted}"))"
-	[ -z "${unknown}" ] || { echo "6.0.48が受け付けないパラメータ: ${unknown}" >&2; return 1; }
+	[ -z "${unknown}" ] || { echo "6.0.49が受け付けないパラメータ: ${unknown}" >&2; return 1; }
 	# 表が空だったり読めていなかったりして「何もチェックしていない」状態を防ぐ。
 	[ "$(printf '%s\n' "${emitted}" | wc -l)" -gt 40 ]
 }

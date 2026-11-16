@@ -8,7 +8,7 @@
 # 呼び出すコード(関数レベル)だけを判定するため、Trivyの死角を補う2つ目のSCAとして使う。
 #
 # 使用法: scripts/scan-go-vuln.sh <イメージ参照> [<イメージ内のバイナリのパス>]
-#   例:   scripts/scan-go-vuln.sh tamacat/zabbix-agent2:6.0.48-alpine-b20261008
+#   例:   scripts/scan-go-vuln.sh tamacat/zabbix-agent2:6.0.49-alpine-b20261008
 #         (パスの既定は usr/sbin/zabbix_agent2)
 #
 # BR6.1: 失敗時(ツール未インストール・イメージ未存在・ゲートFail)は自動リトライを行わない。

@@ -35,7 +35,7 @@ services:
       context: .
       dockerfile: docker/server/Dockerfile
       args:
-        ZABBIX_SRC_DIR: ${ZABBIX_SRC_DIR:-sources/zabbix-6.0.48}
+        ZABBIX_SRC_DIR: ${ZABBIX_SRC_DIR:-sources/zabbix-6.0.49}
         ALPINE_VERSION: ${ALPINE_VERSION:-3.24}
     image: tamacat/zabbix-server-mysql:${ZABBIX_IMAGE_TAG:-6.0-custom}
     container_name: zabbix-server
@@ -63,7 +63,7 @@ services:
       context: .
       dockerfile: docker/web/Dockerfile
       args:
-        ZABBIX_SRC_DIR: ${ZABBIX_SRC_DIR:-sources/zabbix-6.0.48}
+        ZABBIX_SRC_DIR: ${ZABBIX_SRC_DIR:-sources/zabbix-6.0.49}
         ALPINE_VERSION: ${ALPINE_VERSION:-3.24}
     image: tamacat/zabbix-web-nginx-mysql:${ZABBIX_IMAGE_TAG:-6.0-custom}
     container_name: zabbix-web
@@ -91,7 +91,7 @@ services:
       context: .
       dockerfile: docker/agent2/Dockerfile
       args:
-        ZABBIX_SRC_DIR: ${ZABBIX_SRC_DIR:-sources/zabbix-6.0.48}
+        ZABBIX_SRC_DIR: ${ZABBIX_SRC_DIR:-sources/zabbix-6.0.49}
         ALPINE_VERSION: ${ALPINE_VERSION:-3.24}
     image: tamacat/zabbix-agent2:${ZABBIX_IMAGE_TAG:-6.0-custom}
     container_name: zabbix-agent2
@@ -113,7 +113,7 @@ services:
       context: .
       dockerfile: docker/proxy/Dockerfile
       args:
-        ZABBIX_SRC_DIR: ${ZABBIX_SRC_DIR:-sources/zabbix-6.0.48}
+        ZABBIX_SRC_DIR: ${ZABBIX_SRC_DIR:-sources/zabbix-6.0.49}
         ALPINE_VERSION: ${ALPINE_VERSION:-3.24}
     image: tamacat/zabbix-proxy-sqlite3:${ZABBIX_IMAGE_TAG:-6.0-custom}
     container_name: zabbix-proxy
@@ -161,7 +161,7 @@ services:
     volumes:
       - zbx-dev-mysql-data:/var/lib/mysql
       - ./docker/dev-mysql/init:/docker-entrypoint-initdb.d:ro
-      - ./sources/zabbix-6.0.48/database/mysql:/zabbix-schema-src:ro
+      - ./sources/zabbix-6.0.49/database/mysql:/zabbix-schema-src:ro
     ports:
       - "${DEV_MYSQL_PORT:-3306}:3306"
     restart: "no"

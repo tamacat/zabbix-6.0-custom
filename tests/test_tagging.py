@@ -18,9 +18,9 @@ from release_tools.tagging import (
 
 
 def test_generate_tag_produces_expected_format():
-    tag = generate_tag("zabbix-server", "6.0.48", "20260919", "amd64")
+    tag = generate_tag("zabbix-server", "6.0.49", "20260919", "amd64")
 
-    assert tag == "tamacat/zabbix-server-mysql:6.0.48-alpine-b20260919"
+    assert tag == "tamacat/zabbix-server-mysql:6.0.49-alpine-b20260919"
 
 
 @pytest.mark.parametrize(
@@ -35,11 +35,11 @@ def test_generate_tag_produces_expected_format():
 def test_repositories_match_the_zabbix_5_0_custom_registry_names(component, repository):
     # zabbix-5.0-custom publishes to these same Docker Hub repositories (README "Docker Hub").
     assert image_repository(component) == repository
-    assert generate_tag(component, "6.0.48", "20260925") == f"{repository}:6.0.48-alpine-b20260925"
+    assert generate_tag(component, "6.0.49", "20260925") == f"{repository}:6.0.49-alpine-b20260925"
 
 
 def test_generate_tag_does_not_include_the_architecture():
-    assert "amd64" not in generate_tag("zabbix-web", "6.0.48", "20260919", "amd64")
+    assert "amd64" not in generate_tag("zabbix-web", "6.0.49", "20260919", "amd64")
 
 
 def test_image_repository_rejects_unknown_component():
@@ -49,17 +49,17 @@ def test_image_repository_rejects_unknown_component():
 
 def test_generate_tag_rejects_unknown_component():
     with pytest.raises(ValueError):
-        generate_tag("zabbix-java-gateway", "6.0.48", "20260919", "amd64")
+        generate_tag("zabbix-java-gateway", "6.0.49", "20260919", "amd64")
 
 
 def test_generate_tag_rejects_non_amd64_arch():
     with pytest.raises(ValueError):
-        generate_tag("zabbix-proxy", "6.0.48", "20260919", "arm64")
+        generate_tag("zabbix-proxy", "6.0.49", "20260919", "arm64")
 
 
 def test_generate_tag_rejects_malformed_build_date():
     with pytest.raises(ValueError):
-        generate_tag("zabbix-web", "6.0.48", "2026-09-19", "amd64")
+        generate_tag("zabbix-web", "6.0.49", "2026-09-19", "amd64")
 
 
 def test_generate_tag_rejects_malformed_zabbix_version():
@@ -69,7 +69,7 @@ def test_generate_tag_rejects_malformed_zabbix_version():
 
 def test_generate_tag_never_produces_latest_or_other_floating_tag():
     with pytest.raises(ValueError):
-        generate_tag("zabbix-server", "6.0.48", "latest", "amd64")
+        generate_tag("zabbix-server", "6.0.49", "latest", "amd64")
 
 
 def test_is_floating_tag_detects_latest():
@@ -77,12 +77,12 @@ def test_is_floating_tag_detects_latest():
 
 
 def test_is_floating_tag_accepts_dated_tag():
-    assert is_floating_tag("tamacat/zabbix-server-mysql:6.0.48-alpine-b20260919") is False
+    assert is_floating_tag("tamacat/zabbix-server-mysql:6.0.49-alpine-b20260919") is False
 
 
 def test_is_floating_tag_rejects_the_old_tag_format():
     # 誤って旧形式(-r<日付>-<arch>)が出力されたら、それも不正として検出する。
-    assert is_floating_tag("tamacat/zabbix-server-mysql:6.0.48-r20260919-amd64") is True
+    assert is_floating_tag("tamacat/zabbix-server-mysql:6.0.49-r20260919-amd64") is True
 
 
 def _published(image_tag, component="zabbix-server"):
@@ -95,17 +95,17 @@ def _published(image_tag, component="zabbix-server"):
 
 
 def test_published_image_accepts_the_registry_repository_for_its_component():
-    assert _published("tamacat/zabbix-web-nginx-mysql:6.0.48-alpine-b20260925", "zabbix-web").registry == "Docker Hub"
+    assert _published("tamacat/zabbix-web-nginx-mysql:6.0.49-alpine-b20260925", "zabbix-web").registry == "Docker Hub"
 
 
 def test_published_image_rejects_a_repository_that_belongs_to_another_component():
     with pytest.raises(ValueError, match="BR4.1"):
-        _published("tamacat/zabbix-web-nginx-mysql:6.0.48-alpine-b20260925", "zabbix-server")
+        _published("tamacat/zabbix-web-nginx-mysql:6.0.49-alpine-b20260925", "zabbix-server")
 
 
 def test_published_image_rejects_the_previous_wrong_repository_name():
     with pytest.raises(ValueError, match="BR4.1"):
-        _published("tamacat/zabbix-server:6.0.48-r20260925-amd64")
+        _published("tamacat/zabbix-server:6.0.49-r20260925-amd64")
 
 
 def test_require_self_review_confirmation_true_when_pre_confirmed():
@@ -122,15 +122,15 @@ def test_require_self_review_confirmation_uses_prompt_when_not_preconfirmed():
 
 
 def test_generate_release_tag_has_version_and_build_date():
-    assert generate_release_tag("6.0.48", "20261017") == "agent2-6.0.48-b20261017"
+    assert generate_release_tag("6.0.49", "20261017") == "agent2-6.0.49-b20261017"
 
 
 def test_generate_release_tag_differs_between_rebuilds_of_the_same_version():
     # A rebuild with no code change (a refreshed dependency) must not collide with the earlier release.
-    assert generate_release_tag("6.0.48", "20261017") != generate_release_tag("6.0.48", "20261024")
+    assert generate_release_tag("6.0.49", "20261017") != generate_release_tag("6.0.49", "20261024")
 
 
-@pytest.mark.parametrize("version", ["", "6.0", "6.0.48-rc1", "latest", "v6.0.48"])
+@pytest.mark.parametrize("version", ["", "6.0", "6.0.49-rc1", "latest", "v6.0.49"])
 def test_generate_release_tag_rejects_malformed_version(version):
     with pytest.raises(ValueError):
         generate_release_tag(version, "20261017")
@@ -139,14 +139,14 @@ def test_generate_release_tag_rejects_malformed_version(version):
 @pytest.mark.parametrize("build_date", ["", "2026-10-17", "261017", "latest"])
 def test_generate_release_tag_rejects_malformed_build_date(build_date):
     with pytest.raises(ValueError):
-        generate_release_tag("6.0.48", build_date)
+        generate_release_tag("6.0.49", build_date)
 
 
 def test_release_asset_prefix_includes_the_build_date():
     # The build date keeps files from different releases apart when downloaded into one folder.
-    assert release_asset_prefix("6.0.48", "20261017") == "zabbix_agent2-6.0.48-b20261017"
+    assert release_asset_prefix("6.0.49", "20261017") == "zabbix_agent2-6.0.49-b20261017"
 
 
 def test_release_asset_prefix_rejects_the_same_bad_input_as_the_tag():
     with pytest.raises(ValueError):
-        release_asset_prefix("6.0.48", "2026-10-17")
+        release_asset_prefix("6.0.49", "2026-10-17")

@@ -85,7 +85,9 @@ define('ELASTICSEARCH_RESPONSE_AGGREGATION',	1);
 define('ELASTICSEARCH_RESPONSE_DOCUMENTS',		2);
 
 define('ZBX_FONTPATH',				realpath('assets/fonts')); // where to search for font (GD > 2.0.18)
-define('ZBX_GRAPH_FONT_NAME',		'DejaVuSans'); // font file name
+// Graph text uses a font with Japanese glyphs (DejaVuSans has none, so item names etc. showed as boxes).
+// assets/fonts/IPAPGothic.ttf is provided by docker/web/Dockerfile (a link to the font-ipa package's ipagp.ttf).
+define('ZBX_GRAPH_FONT_NAME',		'IPAPGothic'); // font file name
 define('ZBX_GRAPH_LEGEND_HEIGHT',	120); // when graph height is less then this value, some legend will not show up
 
 define('GRAPH_YAXIS_SIDE_DEFAULT', 0); // 0 - LEFT SIDE, 1 - RIGHT SIDE

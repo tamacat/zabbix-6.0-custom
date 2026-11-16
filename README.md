@@ -13,7 +13,7 @@ as the official image of that name — it never touches the main MySQL
 database. Zabbix itself stays on the 6.0.x line; only the base images and
 this project's own build/scan/publish tooling are actively maintained.
 
-The Zabbix 6.0 source tree is vendored at `sources/zabbix-6.0.48/` (see
+The Zabbix 6.0 source tree is vendored at `sources/zabbix-6.0.49/` (see
 "Adding the Zabbix source" below for provenance and how to update it to a
 later 6.0.x point release).
 
@@ -55,7 +55,7 @@ scanned, published image. It implements six components:
 ## Adding the Zabbix source
 
 The Dockerfiles and scripts reference `${ZABBIX_SRC_DIR}` (build arg / env
-var, default `sources/zabbix-6.0.48`) as the location of the buildable
+var, default `sources/zabbix-6.0.49`) as the location of the buildable
 Zabbix 6.0 source tree, relative to this directory. It is vendored directly
 (committed, not a nested git submodule), matching the layout already used by
 the sibling `zabbix-5.0-custom` project.
@@ -65,16 +65,17 @@ and its integrity verified against the official SHA-256 checksum before
 extracting:
 
 ```bash
-curl -sSL -o zabbix-6.0.48.tar.gz \
-  https://cdn.zabbix.com/zabbix/sources/stable/6.0/zabbix-6.0.48.tar.gz
-curl -sSL -o zabbix-6.0.48.tar.gz.sha256 \
-  https://cdn.zabbix.com/zabbix/sources/stable/6.0/zabbix-6.0.48.tar.gz.sha256
-sha256sum -c zabbix-6.0.48.tar.gz.sha256   # must print "OK" before extracting
-tar -xzf zabbix-6.0.48.tar.gz -C sources/
+curl -sSL -o zabbix-6.0.49.tar.gz \
+  https://cdn.zabbix.com/zabbix/sources/stable/6.0/zabbix-6.0.49.tar.gz
+curl -sSL -o zabbix-6.0.49.tar.gz.sha256 \
+  https://cdn.zabbix.com/zabbix/sources/stable/6.0/zabbix-6.0.49.tar.gz.sha256
+# the published .sha256 holds only the hash (no file name), so `sha256sum -c <file>` cannot read it
+echo "$(cat zabbix-6.0.49.tar.gz.sha256)  zabbix-6.0.49.tar.gz" | sha256sum -c -   # must print "OK" before extracting
+tar -xzf zabbix-6.0.49.tar.gz -C sources/
 ```
 
 To move to a later 6.0.x point release, repeat the same download-and-verify
-steps for the new version, replace `sources/zabbix-6.0.48/` with the new
+steps for the new version, replace `sources/zabbix-6.0.49/` with the new
 tree, commit that unmodified tree on its own, point `data/upstream-import-ref`
 at that commit (the SAST gate diffs against it), regenerate the SAST baseline
 (`./scripts/scan-sast.sh --update-baseline`), and update
@@ -97,7 +98,7 @@ bats tests/scripts                # scripts/ tests (requires bats-core)
 python3 -m release_tools.cli register-cve --cve-id CVE-2026-00001 \
   --component zabbix-server --severity Critical
 python3 -m release_tools.cli generate-tag --component zabbix-server \
-  --zabbix-version 6.0.48 --build-date "$(date -u +%Y%m%d)" --arch amd64
+  --zabbix-version 6.0.49 --build-date "$(date -u +%Y%m%d)" --arch amd64
 ```
 
 Once the Zabbix source is present:
@@ -268,11 +269,11 @@ three SQL files from the vendored source once, in this order:
 
 ```bash
 mysql -h "$DB_SERVER_HOST" -u "$MYSQL_USER" -p"$MYSQL_PASSWORD" "$MYSQL_DATABASE" \
-  < sources/zabbix-6.0.48/database/mysql/schema.sql
+  < sources/zabbix-6.0.49/database/mysql/schema.sql
 mysql -h "$DB_SERVER_HOST" -u "$MYSQL_USER" -p"$MYSQL_PASSWORD" "$MYSQL_DATABASE" \
-  < sources/zabbix-6.0.48/database/mysql/images.sql
+  < sources/zabbix-6.0.49/database/mysql/images.sql
 mysql -h "$DB_SERVER_HOST" -u "$MYSQL_USER" -p"$MYSQL_PASSWORD" "$MYSQL_DATABASE" \
-  < sources/zabbix-6.0.48/database/mysql/data.sql
+  < sources/zabbix-6.0.49/database/mysql/data.sql
 ```
 
 **The database must exist with `utf8mb4` character set and `utf8mb4_bin`

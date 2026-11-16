@@ -8,7 +8,7 @@
 
 setup() {
 	REPO_ROOT="$(cd "$(dirname "${BATS_TEST_FILENAME}")/../.." && pwd)"
-	DEFINES="${REPO_ROOT}/sources/zabbix-6.0.48/ui/include/defines.inc.php"
+	DEFINES="${REPO_ROOT}/sources/zabbix-6.0.49/ui/include/defines.inc.php"
 	DOCKERFILE="${REPO_ROOT}/docker/web/Dockerfile"
 	FONT_NAME="$(awk -F"'" '/^define\(.ZBX_GRAPH_FONT_NAME/ {print $4}' "${DEFINES}")"
 }
@@ -28,7 +28,7 @@ setup() {
 
 @test "回転して描く数字用のZBX_FONT_NAMEはDejaVuSansのまま(同梱のttfが存在する)" {
 	grep -q "^define('ZBX_FONT_NAME', 'DejaVuSans');" "${DEFINES}"
-	[ -f "${REPO_ROOT}/sources/zabbix-6.0.48/ui/assets/fonts/DejaVuSans.ttf" ]
+	[ -f "${REPO_ROOT}/sources/zabbix-6.0.49/ui/assets/fonts/DejaVuSans.ttf" ]
 }
 
 @test "webイメージのグラフ用フォントで、異なる2つの漢字が別の字形で描画される(□ではない)" {

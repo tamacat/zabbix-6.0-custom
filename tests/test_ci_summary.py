@@ -143,9 +143,9 @@ OS = {"type": "operating-system", "name": "alpine", "version": "3.24.4"}
 
 
 def test_sbom_diff_reports_updated_added_and_removed_packages(tmp_path):
-    _write_sbom(tmp_path / "prev", "tamacat_zabbix-web", "6.0.48-alpine-b20261102",
+    _write_sbom(tmp_path / "prev", "tamacat_zabbix-web", "6.0.49-alpine-b20261102",
                 [{**OS, "version": "3.24.3"}, _apk("openssl", "3.5.4-r0"), _apk("curl", "8.0-r0"), _apk("old", "1-r0")])
-    _write_sbom(tmp_path / "new", "tamacat_zabbix-web", "6.0.48-alpine-b20261109",
+    _write_sbom(tmp_path / "new", "tamacat_zabbix-web", "6.0.49-alpine-b20261109",
                 [OS, _apk("openssl", "3.5.5-r0"), _apk("curl", "8.0-r0"), _apk("fresh", "2-r0")])
 
     prev = load_sbom_dir(tmp_path / "prev")["tamacat_zabbix-web"]
@@ -156,7 +156,7 @@ def test_sbom_diff_reports_updated_added_and_removed_packages(tmp_path):
     assert added == [("fresh", "2-r0")]
     assert removed == [("old", "1-r0")]
     assert (prev["os"], new["os"]) == ("alpine 3.24.3", "alpine 3.24.4")
-    assert (prev["tag"], new["tag"]) == ("6.0.48-alpine-b20261102", "6.0.48-alpine-b20261109")
+    assert (prev["tag"], new["tag"]) == ("6.0.49-alpine-b20261102", "6.0.49-alpine-b20261109")
 
 
 def test_sbom_loader_ignores_files_and_unversioned_components(tmp_path):
@@ -171,7 +171,7 @@ def test_sbom_loader_ignores_files_and_unversioned_components(tmp_path):
 # --- Markdown -----------------------------------------------------------------------
 
 
-META = {"zabbix_version": "6.0.48", "alpine_version": "3.24", "event": "schedule", "build_date": "20261109"}
+META = {"zabbix_version": "6.0.49", "alpine_version": "3.24", "event": "schedule", "build_date": "20261109"}
 
 
 def _passing_records():
@@ -191,7 +191,7 @@ def test_summary_for_a_clean_run_says_so_and_shows_the_tables():
     text = render_summary(_passing_records(), {}, {}, META)
 
     assert "✅" in text.splitlines()[0]
-    assert "Zabbix 6.0.48" in text
+    assert "Zabbix 6.0.49" in text
     assert "すべてPassしました" in text
     assert "| `tamacat/zabbix-web:x` | trivy | 0 | 1 | 0 | 4 | 1 | 0 | ✅ |" in text
     assert "| semgrep | 範囲: full | 0 | 0 | 7 | 0 | 7 | 0 | 0 | ✅ |" in text
@@ -268,9 +268,9 @@ def test_ci_summary_cli_prints_markdown(tmp_path, capsys):
     for record in _passing_records():
         append_record(records, record)
 
-    exit_code = cli.main(["ci-summary", "--records", str(records), "--zabbix-version", "6.0.48", "--event", "schedule"])
+    exit_code = cli.main(["ci-summary", "--records", str(records), "--zabbix-version", "6.0.49", "--event", "schedule"])
     captured = capsys.readouterr()
 
     assert exit_code == 0
-    assert "Zabbix 6.0.48" in captured.out
+    assert "Zabbix 6.0.49" in captured.out
     assert "schedule" in captured.out

@@ -7,14 +7,14 @@
 #             AlpineにはMinGW向けのOpenSSL・PCRE2・libiconvが無いため、固定したバージョンのソースから
 #             静的ライブラリとしてビルドする。
 #
-# 前提: docker/agent2/Dockerfile と同じ — ${ZABBIX_SRC_DIR}(既定 sources/zabbix-6.0.48)に
+# 前提: docker/agent2/Dockerfile と同じ — ${ZABBIX_SRC_DIR}(既定 sources/zabbix-6.0.49)に
 # Zabbix 6.0ソースが配置されていること。ビルドコンテキストはzabbix-6.0-custom/自身。
 #
 # 成果物は `--target artifacts` で取り出す(scripts/build-agent2-binaries.sh が行う)。
 # アーカイブの名前は ASSET_PREFIX(release_tools.cli generate-release-tag --asset-prefix)で決まる。
 
 ARG ALPINE_VERSION=3.24
-ARG ZABBIX_SRC_DIR=sources/zabbix-6.0.48
+ARG ZABBIX_SRC_DIR=sources/zabbix-6.0.49
 
 # agent2のバイナリにはGo標準ライブラリがそのまま組み込まれる。docker/agent2/Dockerfile と同じ理由・
 # 同じ値で固定する(この2つが食い違っていないことは tests/test_agent2_binaries.py が確認する)。

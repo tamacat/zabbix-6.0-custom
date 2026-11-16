@@ -19,7 +19,7 @@ INTERNAL_ENC_DIR="${HOME_DIR}/enc_internal"
 NL='
 '
 
-# <公式の環境変数>:<zabbix_agent2.conf のパラメータ>(いずれも 6.0.48 のzabbix_agent2.confにある)
+# <公式の環境変数>:<zabbix_agent2.conf のパラメータ>(いずれも 6.0.49 のzabbix_agent2.confにある)
 SCALARS="
 ZBX_DEBUGLEVEL:DebugLevel
 ZBX_TIMEOUT:Timeout

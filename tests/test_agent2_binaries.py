@@ -17,7 +17,7 @@ BINARIES_DIR = REPO_ROOT / "docker" / "agent2-binaries"
 BINARIES_DOCKERFILE = BINARIES_DIR / "Dockerfile"
 WINDOWS_SCRIPT = BINARIES_DIR / "build-windows.sh"
 IMAGE_DOCKERFILE = REPO_ROOT / "docker" / "agent2" / "Dockerfile"
-UPSTREAM = REPO_ROOT / "sources" / "zabbix-6.0.48"
+UPSTREAM = REPO_ROOT / "sources" / "zabbix-6.0.49"
 UPSTREAM_MINGW_MAKEFILE = UPSTREAM / "build" / "mingw" / "Makefile"
 UPSTREAM_CGO_WINDOWS = UPSTREAM / "src" / "go" / "pkg" / "zbxlib" / "globals_windows.go"
 

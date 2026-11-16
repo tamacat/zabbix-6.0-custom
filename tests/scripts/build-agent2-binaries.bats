@@ -12,7 +12,7 @@ setup() {
 	STUB_BIN="${TEST_TMPDIR}/bin"
 	DOCKER_LOG="${TEST_TMPDIR}/docker.log"
 	DIST="${TEST_TMPDIR}/dist"
-	PREFIX="zabbix_agent2-6.0.48-b20260920"
+	PREFIX="zabbix_agent2-6.0.49-b20260920"
 	mkdir -p "${STUB_BIN}"
 
 	# `docker cp <container>:/. <dest>/` は <dest> にアーカイブとSHA256SUMSを書き出す。
@@ -55,7 +55,7 @@ teardown() {
 @test "ZABBIX_SRC_DIRが存在しない場合、明確なエラーメッセージで停止する(BR6.1: 自動リトライなし)" {
 	cd "${REPO_ROOT}"
 	run env \
-		ZABBIX_VERSION=6.0.48 \
+		ZABBIX_VERSION=6.0.49 \
 		ZABBIX_SRC_DIR="${TEST_TMPDIR}/does-not-exist" \
 		DIST_DIR="${DIST}" \
 		bash scripts/build-agent2-binaries.sh
@@ -84,7 +84,7 @@ teardown() {
 	cd "${REPO_ROOT}"
 	run env \
 		ZABBIX_SRC_DIR="${TEST_TMPDIR}" \
-		ZABBIX_VERSION=6.0.48 \
+		ZABBIX_VERSION=6.0.49 \
 		BUILD_DATE=2026-09-20 \
 		DIST_DIR="${DIST}" \
 		bash scripts/build-agent2-binaries.sh
@@ -98,13 +98,13 @@ teardown() {
 	cd "${REPO_ROOT}"
 	run env \
 		ZABBIX_SRC_DIR="${TEST_TMPDIR}" \
-		ZABBIX_VERSION=6.0.48 \
+		ZABBIX_VERSION=6.0.49 \
 		BUILD_DATE=20260920 \
 		DIST_DIR="${DIST}" \
 		bash scripts/build-agent2-binaries.sh
 
 	[ "$status" -eq 0 ]
-	[[ "$output" == *"リリースタグ: agent2-6.0.48-b20260920"* ]]
+	[[ "$output" == *"リリースタグ: agent2-6.0.49-b20260920"* ]]
 	[ -s "${DIST}/${PREFIX}-linux-amd64.tar.gz" ]
 	[ -s "${DIST}/${PREFIX}-windows-amd64.zip" ]
 	[ -s "${DIST}/SHA256SUMS" ]
@@ -113,7 +113,7 @@ teardown() {
 	grep -q "STUB docker build .*-f docker/agent2-binaries/Dockerfile" "${DOCKER_LOG}"
 	grep -q -- "--target artifacts" "${DOCKER_LOG}"
 	grep -q -- "--build-arg ASSET_PREFIX=${PREFIX}" "${DOCKER_LOG}"
-	grep -q -- "--build-arg ZABBIX_VERSION=6.0.48" "${DOCKER_LOG}"
+	grep -q -- "--build-arg ZABBIX_VERSION=6.0.49" "${DOCKER_LOG}"
 	grep -q -- "--build-arg BUILD_DATE=20260920" "${DOCKER_LOG}"
 }
 
@@ -121,14 +121,14 @@ teardown() {
 	cd "${REPO_ROOT}"
 	run env \
 		ZABBIX_SRC_DIR="${TEST_TMPDIR}" \
-		ZABBIX_VERSION=6.0.48 \
+		ZABBIX_VERSION=6.0.49 \
 		BUILD_DATE=20260920 \
 		DIST_DIR="${DIST}" \
 		bash scripts/build-agent2-binaries.sh
 
 	[ "$status" -eq 0 ]
 	grep -q "STUB docker rm -f zabbix-agent2-binaries-" "${DOCKER_LOG}"
-	grep -q "STUB docker rmi -f localhost/zabbix-agent2-binaries:agent2-6.0.48-b20260920" "${DOCKER_LOG}"
+	grep -q "STUB docker rmi -f localhost/zabbix-agent2-binaries:agent2-6.0.49-b20260920" "${DOCKER_LOG}"
 }
 
 @test "成果物が欠けている場合は失敗し、リトライしない(BR6.1)" {
@@ -136,7 +136,7 @@ teardown() {
 	run env \
 		STUB_CP_EMPTY=1 \
 		ZABBIX_SRC_DIR="${TEST_TMPDIR}" \
-		ZABBIX_VERSION=6.0.48 \
+		ZABBIX_VERSION=6.0.49 \
 		BUILD_DATE=20260920 \
 		DIST_DIR="${DIST}" \
 		bash scripts/build-agent2-binaries.sh
@@ -164,7 +164,7 @@ exit 0
 EOF
 	run env \
 		ZABBIX_SRC_DIR="${TEST_TMPDIR}" \
-		ZABBIX_VERSION=6.0.48 \
+		ZABBIX_VERSION=6.0.49 \
 		BUILD_DATE=20260920 \
 		DIST_DIR="${DIST}" \
 		bash scripts/build-agent2-binaries.sh
@@ -177,7 +177,7 @@ EOF
 	cd "${REPO_ROOT}"
 	run env \
 		ZABBIX_SRC_DIR="${TEST_TMPDIR}" \
-		ZABBIX_VERSION=6.0.48 \
+		ZABBIX_VERSION=6.0.49 \
 		BUILD_DATE=20260920 \
 		DIST_DIR="${DIST}" \
 		bash scripts/build-agent2-binaries.sh

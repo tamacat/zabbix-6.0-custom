@@ -24,14 +24,14 @@ CPPCHECK_XML = """<?xml version="1.0" encoding="UTF-8"?>
 <results version="2">
   <errors>
     <error id="nullPointer" severity="warning" msg="Null pointer dereference: p">
-      <location file="sources/zabbix-6.0.48/src/libs/zbxdb/db.c" line="120" column="5"/>
+      <location file="sources/zabbix-6.0.49/src/libs/zbxdb/db.c" line="120" column="5"/>
     </error>
     <error id="nullPointer" severity="warning" msg="Null pointer dereference: p">
-      <location file="sources/zabbix-6.0.48/src/libs/zbxdb/db.c" line="480" column="9"/>
+      <location file="sources/zabbix-6.0.49/src/libs/zbxdb/db.c" line="480" column="9"/>
     </error>
-    <error id="unknownMacro" severity="error" msg="There is an unknown macro here somewhere." file0="sources/zabbix-6.0.48/src/libs/zbxdb/db.c"/>
+    <error id="unknownMacro" severity="error" msg="There is an unknown macro here somewhere." file0="sources/zabbix-6.0.49/src/libs/zbxdb/db.c"/>
     <error id="constVariablePointer" severity="style" msg="Variable 'x' can be declared as pointer to const">
-      <location file="sources/zabbix-6.0.48/src/libs/zbxdb/db.c" line="10" column="1"/>
+      <location file="sources/zabbix-6.0.49/src/libs/zbxdb/db.c" line="10" column="1"/>
     </error>
   </errors>
 </results>
@@ -39,13 +39,13 @@ CPPCHECK_XML = """<?xml version="1.0" encoding="UTF-8"?>
 
 SEMGREP_JSON = {
     "results": [
-        {"check_id": "php.lang.security.xss", "path": "sources/zabbix-6.0.48/ui/a.php", "extra": {"severity": "ERROR"}},
-        {"check_id": "php.lang.security.xss", "path": "sources/zabbix-6.0.48/ui/a.php", "extra": {"severity": "ERROR"}},
-        {"check_id": "js.lang.eval", "path": "sources/zabbix-6.0.48/ui/b.js", "extra": {"severity": "WARNING"}},
+        {"check_id": "php.lang.security.xss", "path": "sources/zabbix-6.0.49/ui/a.php", "extra": {"severity": "ERROR"}},
+        {"check_id": "php.lang.security.xss", "path": "sources/zabbix-6.0.49/ui/a.php", "extra": {"severity": "ERROR"}},
+        {"check_id": "js.lang.eval", "path": "sources/zabbix-6.0.49/ui/b.js", "extra": {"severity": "WARNING"}},
     ]
 }
 
-SOURCE_ROOT = "sources/zabbix-6.0.48"
+SOURCE_ROOT = "sources/zabbix-6.0.49"
 
 
 def test_cppcheck_baseline_key_ignores_line_numbers_and_uses_file0_fallback():
@@ -176,7 +176,7 @@ def test_scan_gate_with_baseline_fails_and_lists_new_finding(tmp_path, capsys):
     with_new = CPPCHECK_XML.replace(
         "</errors>",
         '<error id="uninitvar" severity="error" msg="Uninitialized variable: q">'
-        '<location file="sources/zabbix-6.0.48/src/libs/zbxdb/db.c" line="7"/></error></errors>',
+        '<location file="sources/zabbix-6.0.49/src/libs/zbxdb/db.c" line="7"/></error></errors>',
     )
     scan = _write(tmp_path, "new.xml", with_new)
 

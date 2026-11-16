@@ -47,7 +47,7 @@ teardown() {
 @test "ZABBIX_SRC_DIRが存在しない場合、明確なエラーメッセージで停止する(BR6.1: 自動リトライなし)" {
 	cd "${REPO_ROOT}"
 	run env \
-		ZABBIX_VERSION=6.0.48 \
+		ZABBIX_VERSION=6.0.49 \
 		ZABBIX_SRC_DIR="${TEST_TMPDIR}/does-not-exist" \
 		bash scripts/build-images.sh
 
@@ -71,14 +71,14 @@ teardown() {
 	cd "${REPO_ROOT}"
 	run env \
 		ZABBIX_SRC_DIR="${TEST_TMPDIR}" \
-		ZABBIX_VERSION=6.0.48 \
+		ZABBIX_VERSION=6.0.49 \
 		BUILD_DATE=20260920 \
 		bash scripts/build-images.sh
 
 	[ "$status" -eq 0 ]
-	[[ "$output" == *"tamacat/zabbix-server-mysql:6.0.48-alpine-b20260920"* ]]
-	[[ "$output" == *"tamacat/zabbix-web-nginx-mysql:6.0.48-alpine-b20260920"* ]]
-	[[ "$output" == *"tamacat/zabbix-agent2:6.0.48-alpine-b20260920"* ]]
-	[[ "$output" == *"tamacat/zabbix-proxy-sqlite3:6.0.48-alpine-b20260920"* ]]
+	[[ "$output" == *"tamacat/zabbix-server-mysql:6.0.49-alpine-b20260920"* ]]
+	[[ "$output" == *"tamacat/zabbix-web-nginx-mysql:6.0.49-alpine-b20260920"* ]]
+	[[ "$output" == *"tamacat/zabbix-agent2:6.0.49-alpine-b20260920"* ]]
+	[[ "$output" == *"tamacat/zabbix-proxy-sqlite3:6.0.49-alpine-b20260920"* ]]
 	[[ "$output" == *"STUB docker build"* ]]
 }

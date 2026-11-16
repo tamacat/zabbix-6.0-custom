@@ -1,6 +1,6 @@
 """govulncheck(Goバイナリの脆弱性)のゲート正規化と、イメージからのファイル取り出しのテスト。
 
-入力は `govulncheck -mode=binary -format json` の実出力(zabbix_agent2 6.0.48-alpine-b20261008、
+入力は `govulncheck -mode=binary -format json` の実出力(zabbix_agent2 6.0.49-alpine-b20261008、
 go1.26.8)の構造をそのまま小さくしたもの。Trivyは標準ライブラリの当該脆弱性をまだ知らず0件と
 判定していたが、govulncheckは関数レベルで9件を「呼ばれる」と判定した。
 """

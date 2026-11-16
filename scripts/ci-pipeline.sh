@@ -53,7 +53,7 @@ else
 fi
 
 if [ -z "${ZABBIX_VERSION}" ]; then
-	fail "ZABBIX_VERSION が設定されていません(.env または環境変数で指定してください。例: ZABBIX_VERSION=6.0.48)"
+	fail "ZABBIX_VERSION が設定されていません(.env または環境変数で指定してください。例: ZABBIX_VERSION=6.0.49)"
 fi
 
 if ! command -v trivy >/dev/null 2>&1; then

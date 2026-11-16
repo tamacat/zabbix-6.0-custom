@@ -6,8 +6,8 @@
 # 未追加の状態を含む)は、明確なエラーメッセージを出してここで停止する。
 #
 # 使用する環境変数(.envから読み込み可能。デフォルトは以下の通り):
-#   ZABBIX_SRC_DIR   Zabbixソース配置先(既定: sources/zabbix-6.0.48)
-#   ZABBIX_VERSION   ビルド対象のZabbixバージョン(例: 6.0.48)。必須。
+#   ZABBIX_SRC_DIR   Zabbixソース配置先(既定: sources/zabbix-6.0.49)
+#   ZABBIX_VERSION   ビルド対象のZabbixバージョン(例: 6.0.49)。必須。
 #   ALPINE_VERSION   ベースイメージのAlpineバージョン(既定: 3.24)
 #   BUILD_DATE       タグに埋め込むビルド日(既定: 本日、UTC、YYYYMMDD)
 #   IMAGE_ARCH       対象アーキテクチャ(既定: amd64。BR5.2により初回リリースはamd64のみ)
@@ -25,7 +25,7 @@ if [ -f .env ]; then
 	done < <(grep -Ev '^[[:space:]]*(#|$)' .env)
 fi
 
-ZABBIX_SRC_DIR="${ZABBIX_SRC_DIR:-sources/zabbix-6.0.48}"
+ZABBIX_SRC_DIR="${ZABBIX_SRC_DIR:-sources/zabbix-6.0.49}"
 ALPINE_VERSION="${ALPINE_VERSION:-3.24}"
 BUILD_DATE="${BUILD_DATE:-$(date -u +%Y%m%d)}"
 IMAGE_ARCH="${IMAGE_ARCH:-amd64}"
@@ -50,7 +50,7 @@ else
 fi
 
 if [ -z "${ZABBIX_VERSION:-}" ]; then
-	fail "ZABBIX_VERSION が設定されていません(.env または環境変数で指定してください。例: ZABBIX_VERSION=6.0.48)"
+	fail "ZABBIX_VERSION が設定されていません(.env または環境変数で指定してください。例: ZABBIX_VERSION=6.0.49)"
 fi
 
 if [ ! -d "${ZABBIX_SRC_DIR}" ]; then

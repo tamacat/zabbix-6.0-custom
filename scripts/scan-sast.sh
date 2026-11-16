@@ -4,7 +4,7 @@
 # 突合してBR2.1のゲート判定にかける [FR5.2]。
 #
 # 使用法: scripts/scan-sast.sh [--scope patched|full] [--update-baseline] [<ソースディレクトリ>]
-#   省略時のソースディレクトリは ZABBIX_SRC_DIR(既定: sources/zabbix-6.0.48)。
+#   省略時のソースディレクトリは ZABBIX_SRC_DIR(既定: sources/zabbix-6.0.49)。
 #
 #   --scope patched(既定) 上流の初回インポート(data/upstream-import-ref)から変更された
 #                         ファイル(サードパーティのvendor配下を除く)だけを解析する。
@@ -68,7 +68,7 @@ while [ "$#" -gt 0 ]; do
 	esac
 done
 
-SOURCE_DIR="${SOURCE_DIR_ARG:-${ZABBIX_SRC_DIR:-sources/zabbix-6.0.48}}"
+SOURCE_DIR="${SOURCE_DIR_ARG:-${ZABBIX_SRC_DIR:-sources/zabbix-6.0.49}}"
 
 case "${SAST_SCOPE}" in
 	patched | full) ;;

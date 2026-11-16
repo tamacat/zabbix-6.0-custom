@@ -136,8 +136,8 @@ UnsafeUserParameters=1"
 	[ ! -f "${TEST_TMPDIR}/started.log" ]
 }
 
-@test "このスクリプトが出力するパラメータは、すべて6.0.48のzabbix_agent2.confにあるパラメータである" {
-	local sample="${REPO_ROOT}/sources/zabbix-6.0.48/src/go/conf/zabbix_agent2.conf"
+@test "このスクリプトが出力するパラメータは、すべて6.0.49のzabbix_agent2.confにあるパラメータである" {
+	local sample="${REPO_ROOT}/sources/zabbix-6.0.49/src/go/conf/zabbix_agent2.conf"
 	[ -f "${sample}" ]
 	local accepted emitted unknown
 	accepted="$(grep -oE '^#+ Option: ?[A-Za-z0-9.]+' "${sample}" | sed 's/.*Option: *//' | sort -u)"
@@ -145,7 +145,7 @@ UnsafeUserParameters=1"
 	              sed -n '/^TLS_FILES="/,/^"$/p' "${REPO_ROOT}/docker/agent2/entrypoint.sh" | grep -oE '^TLS[A-Za-z]+File'; \
 	              printf '%s\n' Server ServerActive Hostname EnablePersistentBuffer PersistentBufferFile StatusPort LogType PidFile ControlSocket; } | sort -u)"
 	unknown="$(comm -23 <(printf '%s\n' "${emitted}") <(printf '%s\n' "${accepted}"))"
-	[ -z "${unknown}" ] || { echo "6.0.48のzabbix_agent2.confに無いパラメータ: ${unknown}" >&2; return 1; }
+	[ -z "${unknown}" ] || { echo "6.0.49のzabbix_agent2.confに無いパラメータ: ${unknown}" >&2; return 1; }
 	[ "$(printf '%s\n' "${emitted}" | wc -l)" -gt 25 ]
 }
 

@@ -23,7 +23,7 @@ on:
   workflow_dispatch: {}
 
 env:
-  ZABBIX_VERSION: "6.0.48"
+  ZABBIX_VERSION: "6.0.49"
   ALPINE_VERSION: "3.24"
   IMAGE_ARCH: "amd64"
   REGISTRY_PATH: "data/vulnerability-registry.yaml"

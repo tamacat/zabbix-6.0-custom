@@ -26,7 +26,7 @@ setup() {
 	fi
 
 	# build-images.sh / scan-sast.sh が要求するソースディレクトリ(中身は問わない)。
-	SRC_DIR="${TEST_TMPDIR}/sources/zabbix-6.0.48"
+	SRC_DIR="${TEST_TMPDIR}/sources/zabbix-6.0.49"
 	mkdir -p "${SRC_DIR}"
 
 	# SAST: ソースがgitリポジトリ外のため全体スキャン+空のbaselineで実行する。
@@ -186,7 +186,7 @@ hide_tool() {
 
 run_pipeline() {
 	env \
-		ZABBIX_VERSION=6.0.48 \
+		ZABBIX_VERSION=6.0.49 \
 		ZABBIX_SRC_DIR="${SRC_DIR}" \
 		BUILD_DATE=20260920 \
 		DB_SERVER_HOST=mysql.example.internal \
@@ -218,10 +218,10 @@ run_pipeline() {
 	cd "${REPO_ROOT}"
 	run run_pipeline
 	[ "$status" -eq 0 ]
-	[[ "$output" == *"tamacat/zabbix-server-mysql:6.0.48-alpine-b20260920"* ]]
-	[[ "$output" == *"tamacat/zabbix-web-nginx-mysql:6.0.48-alpine-b20260920"* ]]
-	[[ "$output" == *"tamacat/zabbix-agent2:6.0.48-alpine-b20260920"* ]]
-	[[ "$output" == *"tamacat/zabbix-proxy-sqlite3:6.0.48-alpine-b20260920"* ]]
+	[[ "$output" == *"tamacat/zabbix-server-mysql:6.0.49-alpine-b20260920"* ]]
+	[[ "$output" == *"tamacat/zabbix-web-nginx-mysql:6.0.49-alpine-b20260920"* ]]
+	[[ "$output" == *"tamacat/zabbix-agent2:6.0.49-alpine-b20260920"* ]]
+	[[ "$output" == *"tamacat/zabbix-proxy-sqlite3:6.0.49-alpine-b20260920"* ]]
 	[[ "$output" == *"SCA verdict: Pass"* ]]
 	[[ "$output" == *"SAST verdict: Pass"* ]]
 	[[ "$output" == *"result: Clean"* ]]

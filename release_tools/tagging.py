@@ -2,7 +2,7 @@
 
 公開名・タグ形式(BR4.1)は zabbix-5.0-custom と同じ規約に揃える:
 `tamacat/<リポジトリ名>:<zabbix-version>-alpine-b<YYYYMMDD>`
-(例: `tamacat/zabbix-server-mysql:6.0.48-alpine-b20260919`)。リポジトリ名は公式の
+(例: `tamacat/zabbix-server-mysql:6.0.49-alpine-b20260919`)。リポジトリ名は公式の
 zabbix/zabbix-* イメージと同じ(models.IMAGE_REPOSITORIES)。コード変更を伴わない
 定期再ビルドでもビルド日付が異なる限りタグが衝突しないこと、および `latest` のような
 floatingタグを一切生成しないことを保証する。
@@ -40,7 +40,7 @@ def generate_tag(component: str, zabbix_version: str, build_date: str, arch: str
     if arch not in ARCHITECTURES:
         raise ValueError(f"BR5.2違反: 初回リリースはamd64のみ対応です: {arch!r}")
     if not zabbix_version or not _ZABBIX_VERSION_PATTERN.match(zabbix_version):
-        raise ValueError(f"zabbix_version はX.Y.Z形式でなければなりません(例: 6.0.48): {zabbix_version!r}")
+        raise ValueError(f"zabbix_version はX.Y.Z形式でなければなりません(例: 6.0.49): {zabbix_version!r}")
     if not build_date or not _BUILD_DATE_PATTERN.match(build_date):
         raise ValueError(f"build_date はYYYYMMDD形式の8桁でなければなりません: {build_date!r}")
 
@@ -61,7 +61,7 @@ def generate_release_tag(zabbix_version: str, build_date: str) -> str:
     衝突しない。`latest` のようなfloatingなタグは生成しない。
     """
     if not zabbix_version or not _ZABBIX_VERSION_PATTERN.match(zabbix_version):
-        raise ValueError(f"zabbix_version はX.Y.Z形式でなければなりません(例: 6.0.48): {zabbix_version!r}")
+        raise ValueError(f"zabbix_version はX.Y.Z形式でなければなりません(例: 6.0.49): {zabbix_version!r}")
     if not build_date or not _BUILD_DATE_PATTERN.match(build_date):
         raise ValueError(f"build_date はYYYYMMDD形式の8桁でなければなりません: {build_date!r}")
     return f"agent2-{zabbix_version}-b{build_date}"

@@ -24,7 +24,7 @@ INTERNAL_ENC_DIR="${HOME_DIR}/enc_internal"
 NL='
 '
 
-# <公式の環境変数>:<zabbix_server.conf のパラメータ>(いずれも 6.0.48 の zabbix_server が受け付ける)
+# <公式の環境変数>:<zabbix_server.conf のパラメータ>(いずれも 6.0.49 の zabbix_server が受け付ける)
 SCALARS="
 ZBX_ALLOWUNSUPPORTEDDBVERSIONS:AllowUnsupportedDBVersions
 ZBX_DBTLSCIPHER:DBTLSCipher
