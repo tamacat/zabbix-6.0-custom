@@ -19,10 +19,10 @@ ARG ALPINE_VERSION=3.24
 
 # PHPのバージョンとSHA-256。バージョンを上げるときは、php.netが公開しているSHA-256
 # (https://www.php.net/releases/index.php?json&version=<X.Y>)で確認した値に更新する。現在の値は
-# 2026-10-22に確認した。PHP本体はTrivyが脆弱性を判定できない(Alpineのパッケージではないため)ので、
+# 2026-11-20に確認した。PHP本体はTrivyが脆弱性を判定できない(Alpineのパッケージではないため)ので、
 # 新しいリリースが出ていないかは scripts/check-php-version.sh と定期実行のCIが確認する。
-ARG PHP_VERSION=8.3.36
-ARG PHP_SHA256=dd54693aa334c5c4d72e9aee96b082c2473750a18a6c1d105789c93a3b1692fd
+ARG PHP_VERSION=8.3.37
+ARG PHP_SHA256=0237af84478b7a7649d3964153f1b8653d622550b846f56d63062de683fb86bb
 
 # ---------------------------------------------------------------------------------------
 # PHP(php-fpm と CLI)のビルド
