@@ -38,6 +38,8 @@ COMPAT=""
 SECRET=""
 SBOM_FILE=""
 CONFIRM_FLAG=""
+SIGNED=0
+ATTESTED=0
 
 while [ "$#" -gt 0 ]; do
 	case "$1" in
@@ -114,6 +116,7 @@ else
 	cosign sign --yes "${TAG}" \
 		|| fail "cosign による署名に失敗しました(${TAG})。手動で再実行してください(BR6.1)。"
 	echo "cosign署名が完了しました。"
+	SIGNED=1
 
 	echo ""
 	echo "=================================================================="
@@ -126,7 +129,33 @@ else
 		cosign attest --yes --type cyclonedx --predicate "${SBOM_FILE}" "${TAG}" \
 			|| fail "cosign attest によるSBOM添付に失敗しました(${TAG})。手動で再実行してください(BR6.1)。"
 		echo "SBOM添付が完了しました。"
+		ATTESTED=1
 	fi
+fi
+
+echo ""
+echo "=================================================================="
+echo "系列の最新タグ(<X.Y>-latest)を付け替える"
+echo "=================================================================="
+# 最新タグは、署名とSBOM添付が済んだイメージだけを指す(署名のないイメージへは付け替えない)。
+if [ "${SIGNED}" != 1 ] || [ "${ATTESTED}" != 1 ]; then
+	echo "!! WARNING: 署名とSBOM添付が済んでいないため、最新タグ(<X.Y>-latest)は付け替えません。"
+	echo "!! 最新タグは、CIでの公開(署名とSBOM添付まで成功した場合)にだけ付きます。"
+elif ! LATEST_TAG="$("${PY}" -m release_tools.cli latest-tag --tag "${TAG}")"; then
+	fail "最新タグを決められませんでした(${TAG})。"
+else
+	docker tag "${TAG}" "${LATEST_TAG}" || fail "docker tag に失敗しました(${LATEST_TAG})"
+	docker push "${LATEST_TAG}" \
+		|| fail "docker push に失敗しました(${LATEST_TAG})。日付つきタグ ${TAG} は公開済みです。最新タグだけ手動で付け替えてください(BR6.1)。"
+	# 2つのタグが同じダイジェストを指すこと(日付つきタグへの署名・SBOMがそのまま最新タグにも当てはまること)を確かめる。
+	repository="${TAG%%:*}"
+	digest_count="$(docker inspect --format '{{range .RepoDigests}}{{println .}}{{end}}' "${TAG}" | grep -c "^${repository}@" || true)"
+	case "${digest_count}" in
+		1) ;;
+		0) echo "!! WARNING: ${LATEST_TAG} のダイジェストを確認できませんでした(docker inspect にRepoDigestsがありません)。" ;;
+		*) fail "${LATEST_TAG} が ${TAG} と別のダイジェストになりました(${digest_count}件)。署名が当てはまらないため、最新タグを確認してください。" ;;
+	esac
+	echo "${LATEST_TAG} を ${TAG} と同じイメージへ付け替えました。"
 fi
 
 echo ""

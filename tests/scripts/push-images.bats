@@ -62,3 +62,87 @@ teardown() {
 	[ -f "${TEST_TMPDIR}/docker-calls.log" ]
 	grep -q "push tamacat/zabbix-server-mysql:6.0.49-alpine-b20260920" "${TEST_TMPDIR}/docker-calls.log"
 }
+
+
+# --- 系列の最新タグ(<X.Y>-latest)の付け替え ---------------------------------------------
+# 署名とSBOM添付まで成功する場面(GitHub Actions)を再現する: GITHUB_ACTIONS、cosignのスタブ、
+# SBOMファイル。dockerスタブは `inspect` に、引数のダイジェスト行(<リポジトリ>@sha256:...)を返す。
+_stub_ci_signing() {
+	local digest_lines="$1"
+	cat > "${STUB_BIN}/docker" <<EOF
+#!/usr/bin/env bash
+echo "\$*" >> "${TEST_TMPDIR}/docker-calls.log"
+if [ "\$1" = "inspect" ]; then
+	printf '%s\n' ${digest_lines}
+fi
+exit 0
+EOF
+	cat > "${STUB_BIN}/cosign" <<EOF
+#!/usr/bin/env bash
+echo "cosign \$*" >> "${TEST_TMPDIR}/docker-calls.log"
+exit 0
+EOF
+	chmod +x "${STUB_BIN}/docker" "${STUB_BIN}/cosign"
+	echo '{}' > "${TEST_TMPDIR}/sbom.json"
+	export GITHUB_ACTIONS=true
+}
+
+SAME_DIGEST="tamacat/zabbix-server-mysql@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+OTHER_DIGEST="tamacat/zabbix-server-mysql@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+
+@test "署名とSBOM添付が済んだ公開では、系列の最新タグを同じイメージへ付け替える" {
+	cd "${REPO_ROOT}"
+	_stub_ci_signing "${SAME_DIGEST}"
+	run bash scripts/push-images.sh \
+		--tag tamacat/zabbix-server-mysql:6.0.49-alpine-b20260920 \
+		--sca Pass --sast Pass --compat Pass --secret Clean \
+		--sbom "${TEST_TMPDIR}/sbom.json" --yes
+
+	[ "$status" -eq 0 ]
+	grep -qx "tag tamacat/zabbix-server-mysql:6.0.49-alpine-b20260920 tamacat/zabbix-server-mysql:6.0-latest" "${TEST_TMPDIR}/docker-calls.log"
+	grep -qx "push tamacat/zabbix-server-mysql:6.0-latest" "${TEST_TMPDIR}/docker-calls.log"
+	# 付け替えは、日付つきタグの公開・署名・SBOM添付よりも後でなければならない。
+	attest_line="$(grep -n '^cosign attest' "${TEST_TMPDIR}/docker-calls.log" | head -n 1 | cut -d: -f1)"
+	latest_line="$(grep -nx 'push tamacat/zabbix-server-mysql:6.0-latest' "${TEST_TMPDIR}/docker-calls.log" | head -n 1 | cut -d: -f1)"
+	[ -n "${attest_line}" ]
+	[ "${attest_line}" -lt "${latest_line}" ]
+}
+
+@test "GitHub Actions外(署名しない実行)では、最新タグを付け替えない" {
+	cd "${REPO_ROOT}"
+	_stub_ci_signing "${SAME_DIGEST}"
+	unset GITHUB_ACTIONS
+	run bash scripts/push-images.sh \
+		--tag tamacat/zabbix-server-mysql:6.0.49-alpine-b20260920 \
+		--sca Pass --sast Pass --compat Pass --secret Clean \
+		--sbom "${TEST_TMPDIR}/sbom.json" --yes
+
+	[ "$status" -eq 0 ]
+	[[ "$output" == *"最新タグ"* ]]
+	run grep -e "-latest" "${TEST_TMPDIR}/docker-calls.log"
+	[ "$status" -ne 0 ]
+}
+
+@test "SBOMを添付していない公開では、最新タグを付け替えない" {
+	cd "${REPO_ROOT}"
+	_stub_ci_signing "${SAME_DIGEST}"
+	run bash scripts/push-images.sh \
+		--tag tamacat/zabbix-server-mysql:6.0.49-alpine-b20260920 \
+		--sca Pass --sast Pass --compat Pass --secret Clean --yes
+
+	[ "$status" -eq 0 ]
+	run grep -e "-latest" "${TEST_TMPDIR}/docker-calls.log"
+	[ "$status" -ne 0 ]
+}
+
+@test "最新タグが日付つきタグと別のダイジェストになった場合は失敗する" {
+	cd "${REPO_ROOT}"
+	_stub_ci_signing "${SAME_DIGEST} ${OTHER_DIGEST}"
+	run bash scripts/push-images.sh \
+		--tag tamacat/zabbix-server-mysql:6.0.49-alpine-b20260920 \
+		--sca Pass --sast Pass --compat Pass --secret Clean \
+		--sbom "${TEST_TMPDIR}/sbom.json" --yes
+
+	[ "$status" -ne 0 ]
+	[[ "$output" == *"別のダイジェスト"* ]]
+}

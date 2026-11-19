@@ -298,4 +298,6 @@ jobs:
               --sca Pass --sast Pass --compat Pass --secret Clean \
               --sbom "${sbom_file}" --yes
             echo "- \`${tag}\`" >> "${GITHUB_STEP_SUMMARY}"
+            latest="$(python3 -m release_tools.cli latest-tag --tag "${tag}")"
+            [ -z "${latest}" ] || echo "  - \`${latest}\`(同じイメージ)" >> "${GITHUB_STEP_SUMMARY}"
           done
