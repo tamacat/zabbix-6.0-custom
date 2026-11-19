@@ -4,8 +4,11 @@
 `tamacat/<リポジトリ名>:<zabbix-version>-alpine-b<YYYYMMDD>`
 (例: `tamacat/zabbix-server-mysql:6.0.49-alpine-b20260919`)。リポジトリ名は公式の
 zabbix/zabbix-* イメージと同じ(models.IMAGE_REPOSITORIES)。コード変更を伴わない
-定期再ビルドでもビルド日付が異なる限りタグが衝突しないこと、および `latest` のような
-floatingタグを一切生成しないことを保証する。
+定期再ビルドでもビルド日付が異なる限りタグが衝突しないことを保証する。
+日付つきのタグは、一度公開したら指す先を変えない。唯一の例外が、系列ごとの最新を指す
+`<X.Y>-latest`(例: `tamacat/zabbix-server-mysql:6.0-latest`)で、`latest_tag_for` が日付つきタグから導く。
+これは公開ジョブが署名とSBOM添付に成功した後で、公開したイメージと同じダイジェストへ
+付け替える(scripts/push-images.sh)。`generate_tag` は引き続きfloatingタグを一切生成しない。
 """
 from __future__ import annotations
 
@@ -51,6 +54,19 @@ def generate_tag(component: str, zabbix_version: str, build_date: str, arch: str
         # 要件に対する明示的な最終防衛線として残す。
         raise ValueError(f"floatingタグの生成は禁止されています(アーキテクチャレビューR-07): {tag!r}")
     return tag
+
+
+def latest_tag_for(tag: str) -> str:
+    """日付つきタグ `<リポジトリ>:<X.Y.Z>-alpine-b<YYYYMMDD>` から、同じ系列の最新タグ
+    `<リポジトリ>:<X.Y>-latest` を返す(例: `...:6.0.49-alpine-b20260919` → `...:6.0-latest`)。
+
+    日付つきでないタグ(`latest`・旧形式・コロンのない文字列など)はValueErrorで拒否する。
+    """
+    if is_floating_tag(tag):
+        raise ValueError(f"日付つきのタグではありません: {tag!r}")
+    repository, suffix = tag.split(":", 1)
+    major, minor = suffix.split("-alpine-b", 1)[0].split(".")[:2]
+    return f"{repository}:{major}.{minor}-latest"
 
 
 def generate_release_tag(zabbix_version: str, build_date: str) -> str:

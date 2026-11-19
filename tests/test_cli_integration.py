@@ -178,3 +178,18 @@ def test_generate_release_tag_via_cli_fails_on_a_bad_build_date(capsys):
         "--build-date", "not-a-date",
     ])
     assert exit_code == 1
+
+
+def test_latest_tag_via_cli_derives_the_series_alias(capsys):
+    exit_code, out = _run(None, capsys, [
+        "latest-tag",
+        "--tag", "tamacat/zabbix-web-nginx-mysql:6.0.49-alpine-b20261119",
+    ])
+    assert exit_code == 0
+    assert out.strip() == "tamacat/zabbix-web-nginx-mysql:6.0-latest"
+
+
+def test_latest_tag_via_cli_fails_on_a_tag_that_is_not_dated(capsys):
+    exit_code, out = _run(None, capsys, ["latest-tag", "--tag", "tamacat/zabbix-web-nginx-mysql:latest"])
+    assert exit_code == 1
+    assert out.strip() == ""

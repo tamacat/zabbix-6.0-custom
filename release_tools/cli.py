@@ -25,7 +25,13 @@ from .archivefile import ArchiveFileError, extract_archive_file
 from .imagefile import ImageFileError, extract_image_file
 from .models import COMPONENT_NAMES
 from .registry import VulnerabilityRegistry, VulnerabilityRegistryError
-from .tagging import generate_release_tag, generate_tag, release_asset_prefix, require_self_review_confirmation
+from .tagging import (
+    generate_release_tag,
+    generate_tag,
+    latest_tag_for,
+    release_asset_prefix,
+    require_self_review_confirmation,
+)
 
 DEFAULT_REGISTRY_PATH = "data/vulnerability-registry.yaml"
 
@@ -106,6 +112,16 @@ def cmd_generate_tag(args: argparse.Namespace) -> int:
         )
     except ValueError as exc:
         print(f"generate-tag失敗: {exc}", file=sys.stderr)
+        return 1
+    print(tag)
+    return 0
+
+
+def cmd_latest_tag(args: argparse.Namespace) -> int:
+    try:
+        tag = latest_tag_for(args.tag)
+    except ValueError as exc:
+        print(f"latest-tag失敗: {exc}", file=sys.stderr)
         return 1
     print(tag)
     return 0
@@ -301,6 +317,10 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--build-date", required=True, help="YYYYMMDD")
     p.add_argument("--arch", default="amd64")
     p.set_defaults(func=cmd_generate_tag)
+
+    p = sub.add_parser("latest-tag", help="日付つきの公開タグから、系列の最新タグ(<X.Y>-latest)を導く")
+    p.add_argument("--tag", required=True, help="例: tamacat/zabbix-server-mysql:6.0.49-alpine-b20260919")
+    p.set_defaults(func=cmd_latest_tag)
 
     p = sub.add_parser(
         "generate-release-tag",

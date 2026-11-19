@@ -12,6 +12,7 @@ from release_tools.tagging import (
     generate_tag,
     image_repository,
     is_floating_tag,
+    latest_tag_for,
     release_asset_prefix,
     require_self_review_confirmation,
 )
@@ -150,3 +151,49 @@ def test_release_asset_prefix_includes_the_build_date():
 def test_release_asset_prefix_rejects_the_same_bad_input_as_the_tag():
     with pytest.raises(ValueError):
         release_asset_prefix("6.0.49", "2026-10-17")
+
+
+@pytest.mark.parametrize(
+    "component, repository",
+    [
+        ("zabbix-server", "tamacat/zabbix-server-mysql"),
+        ("zabbix-web", "tamacat/zabbix-web-nginx-mysql"),
+        ("zabbix-agent2", "tamacat/zabbix-agent2"),
+        ("zabbix-proxy", "tamacat/zabbix-proxy-sqlite3"),
+    ],
+)
+def test_latest_tag_for_points_at_the_series_alias_of_every_repository(component, repository):
+    dated = generate_tag(component, "6.0.49", "20261119")
+
+    assert latest_tag_for(dated) == f"{repository}:6.0-latest"
+
+
+def test_latest_tag_is_the_same_for_every_build_of_a_series():
+    # The alias is what moves: two different builds of the series share it.
+    first = "tamacat/zabbix-server-mysql:6.0.49-alpine-b20261116"
+    second = "tamacat/zabbix-server-mysql:6.0.49-alpine-b20261119"
+
+    assert latest_tag_for(first) == latest_tag_for(second) == "tamacat/zabbix-server-mysql:6.0-latest"
+
+
+@pytest.mark.parametrize(
+    "tag",
+    [
+        "tamacat/zabbix-server-mysql:latest",
+        "tamacat/zabbix-server-mysql:6.0-latest",
+        "tamacat/zabbix-server-mysql:6.0.49-r20260919-amd64",
+        "tamacat/zabbix-server-mysql",
+        "",
+    ],
+)
+def test_latest_tag_for_rejects_anything_but_a_dated_tag(tag):
+    with pytest.raises(ValueError):
+        latest_tag_for(tag)
+
+
+def test_the_latest_alias_is_a_floating_tag_that_generate_tag_never_produces():
+    # `<X.Y>-latest` is the one deliberate floating tag: it is only derived from a dated tag
+    # (latest_tag_for), and generate_tag itself still refuses to produce it.
+    assert is_floating_tag("tamacat/zabbix-server-mysql:6.0-latest") is True
+    with pytest.raises(ValueError):
+        generate_tag("zabbix-server", "6.0.49", "6.0-latest")
