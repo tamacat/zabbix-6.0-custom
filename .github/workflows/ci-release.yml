@@ -35,7 +35,7 @@ jobs:
     # リンタを導入しない。schedule実行はコード変更を伴わないためスキップする。
     name: Lint (advisory, Track B only)
     if: github.event_name != 'schedule'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
 
@@ -55,7 +55,7 @@ jobs:
     # 実行しない(PHPの新リリースで、無関係な変更のCIが赤くなるのを避けるため)。
     name: PHP version check (scheduled)
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
 
@@ -73,7 +73,7 @@ jobs:
     # 取り込みを忘れていても publish は止めない(verify のスキャンとは独立した、お知らせ用のジョブ)。
     name: Zabbix upstream version check (scheduled)
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
 
@@ -87,7 +87,10 @@ jobs:
     # `main`へのマージ前にテスト・スキャンを実行する方針に従い、単体テスト
     # (pytest/bats)もここで再実行する。
     name: Verify (tests, build, scan, compat-test)
-    runs-on: ubuntu-latest
+    # ubuntu-24.04に固定する。SASTのbaseline(data/sast-baseline/)はこの版のcppcheck(2.13.0)の出力で
+    # 作ってある。ubuntu-latestが26.04(cppcheck 2.19.0)に変わった2026-11-23の週次実行では、ルール名と
+    # メッセージが変わって全体スキャンが落ちた。26.04へ上げるときは、baselineを作り直してから上げる。
+    runs-on: ubuntu-24.04
     permissions:
       contents: read
       actions: read # 前回のSBOMを取得して、前回ビルドとの差分をJob Summaryに出すため
@@ -242,7 +245,7 @@ jobs:
     # このワークフローファイルの変更だけでは有効化されない)。
     name: Publish (manual self-review gate)
     needs: verify
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     environment: production
     permissions:
       id-token: write # cosign keyless署名(Sigstore OIDC)用

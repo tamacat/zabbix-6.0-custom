@@ -32,7 +32,7 @@ permissions:
 jobs:
   build:
     name: Build and scan (Linux + Windows)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     outputs:
       build_date: ${{ steps.vars.outputs.build_date }}
       release_tag: ${{ steps.vars.outputs.release_tag }}
@@ -149,7 +149,7 @@ jobs:
     # main から実行した場合だけ作る(作業ブランチのコミットからReleaseを作らない)。
     if: github.event_name == 'workflow_dispatch' && inputs.publish && github.ref == 'refs/heads/main'
     needs: [build, smoke-windows]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     environment: production
     permissions:
       contents: write # gh release create
